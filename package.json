@@ -2,7 +2,7 @@
   "name": "redit-dev",
   "version": "2.0.0-DEV-VERSION",
   "description": "Test program for r session",
-  "main": "./src/main.js",
+  "main": "./dist/main.js",
   "scripts": {
     "start": "electron .",
     "tsc": "node_modules\\.bin\\tsc.cmd -p tsconfig.json "
