@@ -1,6 +1,7 @@
 import {app, BrowserWindow, dialog} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
+import path from 'path'
 
 let windows = [];
 
@@ -16,8 +17,9 @@ function createWindow(fileName) {
         width: 800, 
         height: 600,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            nodeIntegration: false,
+            contextIsolation: true,
+			preload: path.join(__dirname, "preload.js")
         }
     })
     win.setMenu(null)

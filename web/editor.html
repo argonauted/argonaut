@@ -4,16 +4,21 @@
 		<title></title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <script type="text/javascript">
+        <script type="module">
 
-            //const ElectronNodeFileAccess = require("../src/ElectronNodeFileAccess.js");
-            //new ElectronNodeFileAccess());
+            //import ElectronNodeFileAccess from "../dist/ElectronNodeFileAccess.js"
+            //new ElectronNodeFileAccess()
         </script>
 
         <script type="text/javacript">
             function getIsDirty() {
                 return false
             }
+        </script>
+
+        <script type="text/javascript" src="../dist/dummy.js"></script>
+        <script>
+            alert(foo(4))
         </script>
 	</head>
 	<body>

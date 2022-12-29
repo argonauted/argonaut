@@ -13,5 +13,5 @@
     "esModuleInterop": true,
     "outDir": "dist"
   },
-  "include": ["src/*.ts"]
+  "include": ["src/*.ts","types/*.ts"]
 }
