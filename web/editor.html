@@ -5,7 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
         <script type="module">
-
             //import ElectronNodeFileAccess from "../dist/ElectronNodeFileAccess.js"
             //new ElectronNodeFileAccess()
         </script>
@@ -18,10 +17,100 @@
 
         <script type="text/javascript" src="../dist/dummy.js"></script>
         <script>
-            alert(foo(4))
+            console.log(foo(4))
+
+            let eventHandle
+            let index = 0
+
+            function run() {
+                console.log("In run!")
+                eventHandle = setInterval(getEvents,1000)
+                setTimeout(() => sendCommand("4"),2000)
+            }
+
+            function getEvents() {
+                rSessionApi.getEvents(index).then(response => {
+                    console.log("Event response:")
+                    if(response.data.result) {
+                        response.data.result.forEach(entry => {
+                            if(entry.type == "console_output") {
+                                console.log("console output:")
+                                console.log(entry.data.text)
+                            }
+                            else if(entry.type == "console_wite_prompt") {
+                                //console.log("console prompt:")
+                                //console.log(entry.data)
+                            }
+                            else if(entry.type == "console_write_input") {
+                                console.log("console input:")
+                                console.log(entry.data.text)
+                            }
+                            else if(entry.type == "deferred_init_completed") {
+                                console.log("Init Complete!")
+                                onInitComplete()
+                            }
+                            else {
+                                console.log("Unkown: " + entry.type)
+                                console.log(JSON.stringify(entry))
+                            }
+                        })
+
+                        index += response.data.result.length
+                        //console.log("Index set to " + index)
+                    }
+                    else {
+                        //console.log("Empty result in events")
+                    }
+                }).catch(e => {
+                    if(e) console.log(e.toString())
+                    else console.log("Unknown error in request")
+                })
+            }
+
+            let commands = ["n <- 100","x <- rnorm(n)","x","plot(1:n,x)"]
+            function onInitComplete() {
+                let cmdIndex = 0
+                let runCommands = () => {
+                    if(cmdIndex < commands.length) {
+                        console.log("Sending command: " + commands[cmdIndex])
+                        sendCommand(commands[cmdIndex])
+                        cmdIndex++
+                        setTimeout(runCommands,1000)
+                    }
+                    else {
+                        console.log("Commands completed!")
+                        setTimeout(endEvents,4000)
+                    }
+                }
+                runCommands()
+            }
+
+            function endEvents() {
+                clearInterval(eventHandle)
+                console.log("Run complete!")
+            }
+
+            
+
+            function sendCommand(cmdText) {
+                rSessionApi.sendCommand(cmdText).then(response => {
+                    console.log("Command sent: " + cmdText)
+                })
+            }
+
+            function printResponse(resPromise) {
+                resPromise.then(response => {
+                    console.log(JSON.stringify(response))
+                        
+                }).catch(e => {
+                    if(e) console.log(e.toString())
+                    else console.log("Unknown error in request")
+                })
+            }
         </script>
+
 	</head>
-	<body>
+	<body onload="run()">
         <p>This is the application!</p>
 	</body>
 </html>

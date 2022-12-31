@@ -12,7 +12,6 @@
     "crc": "^4.2.0",
     "crypto": "^1.0.1",
     "electron": "~22.0.0",
-    "node-fetch": "^3.3.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

@@ -3,11 +3,14 @@ import http from 'http'
 import process from 'process'
 import { randomUUID } from 'crypto' //dont know why a different one is used. maybe just because its a different place
 import { getenv, setenv, localPeer, generateShortenedUuid, getMessageId } from './rSessionUtils'
+import {dialog} from 'electron'
 
 export class RSession {
     sharedSecret: string
     port: number
     launcherToken: string
+    eventsUrl: string
+    commandUrl: string
 
     constructor() {
 
@@ -85,113 +88,203 @@ export class RSession {
         proc.stderr?.on('data', (data) => {
         console.error(data.toString())
         });
+
+        this.eventsUrl = `http://127.0.0.1:${this.port}/events/get_events`
+        this.commandUrl = `http://127.0.0.1:${this.port}/rpc/console_input`
     }
 
-
-
-    runTest() {
-        let postData0 =  JSON.stringify({
-            "method": "get_events",
-            "params": [0],
-            "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
-            "clientVersion": ""
-        })
-        let options0 = {
-            hostname: "127.0.0.1",
-            port: this.port,
-            path: "/events/get_events",
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(postData0),
-                "X-Shared-Secret": this.sharedSecret,
-                "X-RStudio-Refresh-Auth-Creds": 0,
-                "X-RS-RID": 435234559
-            }
-        }
-
-        let postData1 =  JSON.stringify({
+    sendCommand(cmdText: string) {
+        let body =  JSON.stringify({
             "method": "console_input",
             "params": [
-                "78 + 45",
+                cmdText,
                 "",
                 0
             ],
             "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
             "clientVersion": ""
         })
-        let options1 = {
-            hostname: "127.0.0.1",
-            port: this.port,
-            path: "/rpc/console_input",
+        let options = {
             method: "POST",
+            body: body,
             headers: {
                 "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(postData1),
+                "Content-Length": String(Buffer.byteLength(body)),
                 "X-Shared-Secret": this.sharedSecret,
-                "X-RStudio-Refresh-Auth-Creds": 0,
-                "X-RS-RID": getMessageId()
+                "X-RStudio-Refresh-Auth-Creds": String(0),
+                "X-RS-RID": String(getMessageId())
             }
+            
         }
-        let postData2 =  JSON.stringify({
+        return doRequest(this.commandUrl,options,body)
+    }
+
+    getEvents(index: number) {
+        console.log("Request event index = " + index)
+        let body =  JSON.stringify({
             "method": "get_events",
-            "params": [5],
+            "params": [index],
             "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
             "clientVersion": ""
         })
-        let options2 = {
-            hostname: "127.0.0.1",
-            port: this.port,
-            path: "/events/get_events",
+        let options = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(postData2),
+                "Content-Length": String(Buffer.byteLength(body)),
                 "X-Shared-Secret": this.sharedSecret,
-                "X-RStudio-Refresh-Auth-Creds": 0,
-                "X-RS-RID": 506878359
+                "X-RStudio-Refresh-Auth-Creds": String(0),
+                "X-RS-RID": String(getMessageId())
             }
+            
         }
+        return doRequest(this.eventsUrl,options,body)
+    }
+}
 
-        let processRes = res => {
-            console.log(`STATUS: ${res.statusCode}`)
-            console.log(`HEADERS: ${JSON.stringify(res.headers)}`)
+function doRequest(url,options,body: string | null) {
+    return new Promise((resolve,reject) => {
+        let processRes = (res) => {
+            let response: Record<string,string> = {}
+            response.statusCode = res.statusCode
+            response.headers = res.headers
+            let data = ""
+        
             res.setEncoding('utf8')
             res.on('data', (chunk) => {
-            console.log(`BODY: ${chunk}`)
+                data = data + chunk
             })
             res.on('end', () => {
-            console.log('No more data in response.')
+                if(data.length > 0) {
+                    //need error checking!!!
+                    response.data = JSON.parse(data)
+                }
+                resolve(response)
             })
         }
-        let processErr = e => {
-            console.error(`problem with request: ${e.message}`);
+        let processErr = (e) => {
+            reject(e)
         }
 
-        let tryIt = () => {
-            const req0 = http.request(options0,processRes)
-            req0.on('error', processErr);
-            
-            // Write data to request body
-            req0.write(postData0);
-            req0.end();
-
-            const req1 = http.request(options1,processRes)
-            req1.on('error', processErr);
-            
-            // Write data to request body
-            req1.write(postData1);
-            req1.end();
-
-            const req2 = http.request(options2,processRes)
-            req1.on('error', processErr);
-            
-            // Write data to request body
-            req2.write(postData2);
-            req2.end();
+        const req = http.request(url,options,processRes)
+        req.on('error', processErr)
+        if(body !== null) {
+            req.write(body!)
         }
-
-        setTimeout(tryIt,3000)
-    }
-
+        req.end()
+    })
 }
+
+
+    
+
+    
+
+
+
+    // runTest() {
+    //     let postData0 =  JSON.stringify({
+    //         "method": "get_events",
+    //         "params": [0],
+    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
+    //         "clientVersion": ""
+    //     })
+    //     let options0 = {
+    //         hostname: "127.0.0.1",
+    //         port: this.port,
+    //         path: "/events/get_events",
+    //         method: "POST",
+    //         headers: {
+    //             "Content-Type": "application/json",
+    //             "Content-Length": Buffer.byteLength(postData0),
+    //             "X-Shared-Secret": this.sharedSecret,
+    //             "X-RStudio-Refresh-Auth-Creds": 0,
+    //             "X-RS-RID": 435234559
+    //         }
+    //     }
+
+    //     let postData1 =  JSON.stringify({
+    //         "method": "console_input",
+    //         "params": [
+    //             "78 + 45",
+    //             "",
+    //             0
+    //         ],
+    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
+    //         "clientVersion": ""
+    //     })
+    //     let options1 = {
+    //         hostname: "127.0.0.1",
+    //         port: this.port,
+    //         path: "/rpc/console_input",
+    //         method: "POST",
+    //         headers: {
+    //             "Content-Type": "application/json",
+    //             "Content-Length": Buffer.byteLength(postData1),
+    //             "X-Shared-Secret": this.sharedSecret,
+    //             "X-RStudio-Refresh-Auth-Creds": 0,
+    //             "X-RS-RID": getMessageId()
+    //         }
+    //     }
+    //     let postData2 =  JSON.stringify({
+    //         "method": "get_events",
+    //         "params": [5],
+    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
+    //         "clientVersion": ""
+    //     })
+    //     let options2 = {
+    //         hostname: "127.0.0.1",
+    //         port: this.port,
+    //         path: "/events/get_events",
+    //         method: "POST",
+    //         headers: {
+    //             "Content-Type": "application/json",
+    //             "Content-Length": Buffer.byteLength(postData2),
+    //             "X-Shared-Secret": this.sharedSecret,
+    //             "X-RStudio-Refresh-Auth-Creds": 0,
+    //             "X-RS-RID": 506878359
+    //         }
+    //     }
+
+    //     let processRes = res => {
+    //         console.log(`STATUS: ${res.statusCode}`)
+    //         console.log(`HEADERS: ${JSON.stringify(res.headers)}`)
+    //         res.setEncoding('utf8')
+    //         res.on('data', (chunk) => {
+    //         console.log(`BODY: ${chunk}`)
+    //         })
+    //         res.on('end', () => {
+    //         console.log('No more data in response.')
+    //         })
+    //     }
+    //     let processErr = e => {
+    //         console.error(`problem with request: ${e.message}`);
+    //     }
+
+    //     let tryIt = () => {
+    //         const req0 = http.request(options0,processRes)
+    //         req0.on('error', processErr);
+            
+    //         // Write data to request body
+    //         req0.write(postData0);
+    //         req0.end();
+
+    //         const req1 = http.request(options1,processRes)
+    //         req1.on('error', processErr);
+            
+    //         // Write data to request body
+    //         req1.write(postData1);
+    //         req1.end();
+
+    //         const req2 = http.request(options2,processRes)
+    //         req1.on('error', processErr);
+            
+    //         // Write data to request body
+    //         req2.write(postData2);
+    //         req2.end();
+    //     }
+
+    //     setTimeout(tryIt,3000)
+    // }
+
+

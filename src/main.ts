@@ -1,11 +1,13 @@
-import {app, BrowserWindow, dialog} from 'electron'
+import {app, BrowserWindow, dialog, ipcMain} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
 import path from 'path'
 
-let windows = [];
+let windows = []
 
-const APP_FILE = "web/editor.html"
+const APP_FILE = "../web/editor.html"
+
+let rSession = new RSession()
 
 //=============================================
 // App/Electron Code
@@ -64,21 +66,20 @@ function createWindow(fileName) {
     })
 
     windows.push(win);
-
-    //start the R session
-    let rSession = new RSession()
-    rSession.initSession()
-    
-    setTimeout(() =>{
-        console.log("Starting test!")
-        rSession.runTest()
-    },2000)
 }
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', () => createWindow(APP_FILE))
+app.on('ready', () => {
+    //start the R session
+    rSession.initSession()
+
+    ipcMain.handle('rsession:sendcommand',sendSessionCommand)
+    ipcMain.handle('rsession:getevents',getEvents)
+
+    createWindow(APP_FILE)
+})
 
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
@@ -97,4 +98,11 @@ app.on('activate', () => {
     }
 })
 
+function sendSessionCommand(event,cmdText) {
+    return rSession.sendCommand(cmdText)
+}
+
+function getEvents(event,index) {
+    return rSession.getEvents(index)
+}
 
