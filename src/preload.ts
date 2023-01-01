@@ -121,5 +121,6 @@ const {contextBridge, ipcRenderer} = require('electron')
 contextBridge.exposeInMainWorld('rSessionApi', {
 	//for now, I will just manage the connection in the renderer
 	sendCommand: cmdText => ipcRenderer.invoke("rsession:sendcommand",cmdText),
-    getEvents: index =>  ipcRenderer.invoke("rsession:getevents",index)
+    getEvents: index =>  ipcRenderer.invoke("rsession:getevents",index),
+	getGraphics: fileName => ipcRenderer.invoke("ressions:getgraphics",fileName)
 })

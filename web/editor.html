@@ -30,31 +30,48 @@
 
             function getEvents() {
                 rSessionApi.getEvents(index).then(response => {
-                    console.log("Event response:")
+                    let dt = new Date()
+                    console.log(`Event response - ${dt.getMinutes()}-${dt.getSeconds()}.${dt.getMilliseconds()}`)
                     if(response.data.result) {
-                        response.data.result.forEach(entry => {
-                            if(entry.type == "console_output") {
-                                console.log("console output:")
-                                console.log(entry.data.text)
-                            }
-                            else if(entry.type == "console_wite_prompt") {
-                                //console.log("console prompt:")
-                                //console.log(entry.data)
-                            }
-                            else if(entry.type == "console_write_input") {
-                                console.log("console input:")
-                                console.log(entry.data.text)
-                            }
-                            else if(entry.type == "deferred_init_completed") {
+                        response.data.result.forEach( (entry,index) => {
+                            
+                            console.log(`type: ${entry.type}, index: ${index}`)
+                            console.log(JSON.stringify(entry))
+
+                            if(entry.type == "deferred_init_completed") {
                                 console.log("Init Complete!")
                                 onInitComplete()
                             }
-                            else {
-                                console.log("Unkown: " + entry.type)
-                                console.log(JSON.stringify(entry))
+                            else if(entry.type == "plots_state_changed") {
+                                let plotFileName = entry.data.filename
+                                rSessionApi.getGraphics(plotFileName).then(response => {
+                                        console.log("Graphics file received:")
+                                        console.log(JSON.stringify(response))   
+                                })
+                                .catch(err => {
+                                    console.error("Error getting graphics file:")
+                                    console.error(err.toString())
+                                })
                             }
-                        })
 
+                            // else if(entry.type == "console_output") {
+                            //     console.log("console output:")
+                            //     console.log(entry.data.text)
+                            // }
+                            // // else if(entry.type == "console_wite_prompt") {
+                            // //     console.log("console prompt:")
+                            // //     console.log(entry.data)
+                            // // }
+                            // else if(entry.type == "console_write_input") {
+                            //     console.log("console input:")
+                            //     console.log(entry.data.text)
+                            // }
+                           
+                            // else {
+                            //     console.log("Unkown: " + entry.type)
+                            //     console.log(JSON.stringify(entry))
+                            // }
+                        })
                         index += response.data.result.length
                         //console.log("Index set to " + index)
                     }
@@ -89,8 +106,6 @@
                 clearInterval(eventHandle)
                 console.log("Run complete!")
             }
-
-            
 
             function sendCommand(cmdText) {
                 rSessionApi.sendCommand(cmdText).then(response => {

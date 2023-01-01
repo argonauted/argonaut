@@ -1,6 +1,7 @@
 export interface IRSessionApi {
   sendCommand: (cmdText: string) => Promise<Object>
   getEvents: (index: number) => Promise<Object>
+  getGraphics: (fileName: string) => Promise<Object>
 }
 
 // export interface IOpenSaveApi {

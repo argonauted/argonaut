@@ -77,6 +77,7 @@ app.on('ready', () => {
 
     ipcMain.handle('rsession:sendcommand',sendSessionCommand)
     ipcMain.handle('rsession:getevents',getEvents)
+    ipcMain.handle('ressions:getgraphics',getGraphics)
 
     createWindow(APP_FILE)
 })
@@ -104,5 +105,9 @@ function sendSessionCommand(event,cmdText) {
 
 function getEvents(event,index) {
     return rSession.getEvents(index)
+}
+
+function getGraphics(event,fileName) {
+    return rSession.getGraphics(fileName)
 }
 

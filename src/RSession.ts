@@ -140,9 +140,22 @@ export class RSession {
         }
         return doRequest(this.eventsUrl,options,body)
     }
+
+    getGraphics(fileName: string) {
+        console.log("Request graphics file = " + fileName)
+        let options = {
+            method: "GET",
+            headers: {
+                "X-Shared-Secret": this.sharedSecret,
+            }
+            
+        }
+        let graphicsUrl = `http://127.0.0.1:${this.port}/graphics/${fileName}`
+        return doBinaryRequest(graphicsUrl,options)
+    }
 }
 
-function doRequest(url,options,body: string | null) {
+function doRequest(url,options,body: string | null = null) {
     return new Promise((resolve,reject) => {
         let processRes = (res) => {
             let response: Record<string,string> = {}
@@ -158,6 +171,39 @@ function doRequest(url,options,body: string | null) {
                 if(data.length > 0) {
                     //need error checking!!!
                     response.data = JSON.parse(data)
+                }
+                resolve(response)
+            })
+        }
+        let processErr = (e) => {
+            reject(e)
+        }
+
+        const req = http.request(url,options,processRes)
+        req.on('error', processErr)
+        if(body !== null) {
+            req.write(body!)
+        }
+        req.end()
+    })
+}
+
+//testing binary data
+function doBinaryRequest(url,options,body: string | null = null) {
+    return new Promise((resolve,reject) => {
+        let processRes = (res) => {
+            let response: Record<string,string> = {}
+            response.statusCode = res.statusCode
+            response.headers = res.headers
+            let data = []
+            res.on('data', (chunk) => {
+                data.push(chunk)
+            })
+            res.on('end', () => {
+                if(data.length > 0) {
+                    var buffer = Buffer.concat(data)
+                    //need error checking!!!
+                    response.data = buffer.toString('base64')
                 }
                 resolve(response)
             })
