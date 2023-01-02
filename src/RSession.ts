@@ -3,14 +3,11 @@ import http from 'http'
 import process from 'process'
 import { randomUUID } from 'crypto' //dont know why a different one is used. maybe just because its a different place
 import { getenv, setenv, localPeer, generateShortenedUuid, getMessageId } from './rSessionUtils'
-import {dialog} from 'electron'
 
 export class RSession {
     sharedSecret: string
     port: number
     launcherToken: string
-    eventsUrl: string
-    commandUrl: string
 
     constructor() {
 
@@ -88,19 +85,12 @@ export class RSession {
         proc.stderr?.on('data', (data) => {
         console.error(data.toString())
         });
-
-        this.eventsUrl = `http://127.0.0.1:${this.port}/events/get_events`
-        this.commandUrl = `http://127.0.0.1:${this.port}/rpc/console_input`
     }
 
-    sendCommand(cmdText: string) {
+    sendRpcRequest(scope: string, method: string, params: Array<any>) {
         let body =  JSON.stringify({
-            "method": "console_input",
-            "params": [
-                cmdText,
-                "",
-                0
-            ],
+            "method": method,
+            "params": params,
             "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
             "clientVersion": ""
         })
@@ -114,41 +104,18 @@ export class RSession {
                 "X-RStudio-Refresh-Auth-Creds": String(0),
                 "X-RS-RID": String(getMessageId())
             }
-            
         }
-        return doRequest(this.commandUrl,options,body)
+        let url = `http://127.0.0.1:${this.port}/${scope}/${method}`
+        return doRequest(url,options,body)
     }
 
-    getEvents(index: number) {
-        console.log("Request event index = " + index)
-        let body =  JSON.stringify({
-            "method": "get_events",
-            "params": [index],
-            "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
-            "clientVersion": ""
-        })
-        let options = {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Content-Length": String(Buffer.byteLength(body)),
-                "X-Shared-Secret": this.sharedSecret,
-                "X-RStudio-Refresh-Auth-Creds": String(0),
-                "X-RS-RID": String(getMessageId())
-            }
-            
-        }
-        return doRequest(this.eventsUrl,options,body)
-    }
-
-    getGraphics(fileName: string) {
+    getBinary(fileName: string) {
         console.log("Request graphics file = " + fileName)
         let options = {
             method: "GET",
             headers: {
                 "X-Shared-Secret": this.sharedSecret,
             }
-            
         }
         let graphicsUrl = `http://127.0.0.1:${this.port}/graphics/${fileName}`
         return doBinaryRequest(graphicsUrl,options)
@@ -225,112 +192,3 @@ function doBinaryRequest(url,options,body: string | null = null) {
     
 
     
-
-
-
-    // runTest() {
-    //     let postData0 =  JSON.stringify({
-    //         "method": "get_events",
-    //         "params": [0],
-    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
-    //         "clientVersion": ""
-    //     })
-    //     let options0 = {
-    //         hostname: "127.0.0.1",
-    //         port: this.port,
-    //         path: "/events/get_events",
-    //         method: "POST",
-    //         headers: {
-    //             "Content-Type": "application/json",
-    //             "Content-Length": Buffer.byteLength(postData0),
-    //             "X-Shared-Secret": this.sharedSecret,
-    //             "X-RStudio-Refresh-Auth-Creds": 0,
-    //             "X-RS-RID": 435234559
-    //         }
-    //     }
-
-    //     let postData1 =  JSON.stringify({
-    //         "method": "console_input",
-    //         "params": [
-    //             "78 + 45",
-    //             "",
-    //             0
-    //         ],
-    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
-    //         "clientVersion": ""
-    //     })
-    //     let options1 = {
-    //         hostname: "127.0.0.1",
-    //         port: this.port,
-    //         path: "/rpc/console_input",
-    //         method: "POST",
-    //         headers: {
-    //             "Content-Type": "application/json",
-    //             "Content-Length": Buffer.byteLength(postData1),
-    //             "X-Shared-Secret": this.sharedSecret,
-    //             "X-RStudio-Refresh-Auth-Creds": 0,
-    //             "X-RS-RID": getMessageId()
-    //         }
-    //     }
-    //     let postData2 =  JSON.stringify({
-    //         "method": "get_events",
-    //         "params": [5],
-    //         "clientId": "33e600bb-c1b1-46bf-b562-ab5cba070b0e",
-    //         "clientVersion": ""
-    //     })
-    //     let options2 = {
-    //         hostname: "127.0.0.1",
-    //         port: this.port,
-    //         path: "/events/get_events",
-    //         method: "POST",
-    //         headers: {
-    //             "Content-Type": "application/json",
-    //             "Content-Length": Buffer.byteLength(postData2),
-    //             "X-Shared-Secret": this.sharedSecret,
-    //             "X-RStudio-Refresh-Auth-Creds": 0,
-    //             "X-RS-RID": 506878359
-    //         }
-    //     }
-
-    //     let processRes = res => {
-    //         console.log(`STATUS: ${res.statusCode}`)
-    //         console.log(`HEADERS: ${JSON.stringify(res.headers)}`)
-    //         res.setEncoding('utf8')
-    //         res.on('data', (chunk) => {
-    //         console.log(`BODY: ${chunk}`)
-    //         })
-    //         res.on('end', () => {
-    //         console.log('No more data in response.')
-    //         })
-    //     }
-    //     let processErr = e => {
-    //         console.error(`problem with request: ${e.message}`);
-    //     }
-
-    //     let tryIt = () => {
-    //         const req0 = http.request(options0,processRes)
-    //         req0.on('error', processErr);
-            
-    //         // Write data to request body
-    //         req0.write(postData0);
-    //         req0.end();
-
-    //         const req1 = http.request(options1,processRes)
-    //         req1.on('error', processErr);
-            
-    //         // Write data to request body
-    //         req1.write(postData1);
-    //         req1.end();
-
-    //         const req2 = http.request(options2,processRes)
-    //         req1.on('error', processErr);
-            
-    //         // Write data to request body
-    //         req2.write(postData2);
-    //         req2.end();
-    //     }
-
-    //     setTimeout(tryIt,3000)
-    // }
-
-

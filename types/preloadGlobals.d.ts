@@ -1,7 +1,6 @@
 export interface IRSessionApi {
-  sendCommand: (cmdText: string) => Promise<Object>
-  getEvents: (index: number) => Promise<Object>
-  getGraphics: (fileName: string) => Promise<Object>
+  sendRpcRequest: (scope: string, method: string, params: Array<any>) => Promise<Object>
+  getBinary: (fileName: string) => Promise<Object>
 }
 
 // export interface IOpenSaveApi {

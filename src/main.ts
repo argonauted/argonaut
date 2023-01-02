@@ -75,9 +75,8 @@ app.on('ready', () => {
     //start the R session
     rSession.initSession()
 
-    ipcMain.handle('rsession:sendcommand',sendSessionCommand)
-    ipcMain.handle('rsession:getevents',getEvents)
-    ipcMain.handle('ressions:getgraphics',getGraphics)
+    ipcMain.handle('rsession:sendrpcrequest',sendRpcRequest)
+    ipcMain.handle('ressions:getbinary',getBinary)
 
     createWindow(APP_FILE)
 })
@@ -99,15 +98,11 @@ app.on('activate', () => {
     }
 })
 
-function sendSessionCommand(event,cmdText) {
-    return rSession.sendCommand(cmdText)
+function sendRpcRequest(event: any, scope: string, method: string, params: Array<any>) {
+    return rSession.sendRpcRequest(scope,method,params)
 }
 
-function getEvents(event,index) {
-    return rSession.getEvents(index)
-}
-
-function getGraphics(event,fileName) {
-    return rSession.getGraphics(fileName)
+function getBinary(event: any,fileName: string) {
+    return rSession.getBinary(fileName)
 }
 
