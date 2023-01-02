@@ -29,7 +29,15 @@
                 {scope: 'rpc', method: 'console_input', params: ["n <- 100","",0]},
                 {scope: 'rpc', method: 'console_input', params: ["x <- rnorm(n)","",0]},
                 {scope: 'rpc', method: 'console_input', params: ["x","",0]},
-                {scope: 'rpc', method: 'console_input', params: ["plot(1:n,x)","",0]}
+                {scope: 'rpc', method: 'console_input', params: ["plot(1:n,x)","",0]},
+                {scope: 'rpc', method: 'execute_code', params: ["n <- 34"]},
+                {scope: 'rpc', method: 'execute_code', params: ["print(n)"]},
+                {scope: 'rpc', method: 'execute_code', params: ["y <- c(\"sadfasd\",\"hgfhgf\",\"dtrdtrd\")"]},
+                {scope: 'rpc', method: 'execute_r_code', params: ["y <- 342342"]},
+                {scope: 'rpc', method: 'execute_code', params: ["y <- y + 342343"]},
+                {scope: 'rpc', method: 'get_object_contents', params: ["y"]},
+                {scope: 'rpc', method: 'console_input', params: ["y"]},
+                {scope: 'rpc', method: 'execute_r_code', params: ["paste(\"[\",paste(c(\"asdf\",\"nnnn\",\"ffff\"),collapse=\",\"),\"]\",sep=\"\")"]}
             ]
 
             function run() {
@@ -153,7 +161,7 @@
 
             function sendCommand(cmd) {
                 rSessionApi.sendRpcRequest(cmd.scope,cmd.method,cmd.params).then(response => {
-                    console.log("Command sent: " + JSON.stringify(cmd))
+                    console.log("Command response: " + JSON.stringify(response))
                 })
             }
 
