@@ -77,6 +77,7 @@ app.on('ready', () => {
 
     ipcMain.handle('rsession:sendrpcrequest',sendRpcRequest)
     ipcMain.handle('ressions:getbinary',getBinary)
+    ipcMain.handle('utilapi:getfilepath',getFilePath)
 
     createWindow(APP_FILE)
 })
@@ -104,5 +105,9 @@ function sendRpcRequest(event: any, scope: string, method: string, params: Array
 
 function getBinary(event: any,fileName: string) {
     return rSession.getBinary(fileName)
+}
+
+function getFilePath(event: any,relPath: string) {
+    return path.join(__dirname,relPath)
 }
 

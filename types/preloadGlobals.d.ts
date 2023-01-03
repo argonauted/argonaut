@@ -3,6 +3,10 @@ export interface IRSessionApi {
   getBinary: (fileName: string) => Promise<Object>
 }
 
+export interface IUtilApit {
+  getFilePath: (relPath: string) => Promise<string>
+}
+
 // export interface IOpenSaveApi {
 //   loadConfig: (onOpen) => void
 //   saveFileAs: (fileMetadata,data,onSave) => void,

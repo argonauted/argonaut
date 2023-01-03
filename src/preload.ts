@@ -123,3 +123,9 @@ contextBridge.exposeInMainWorld('rSessionApi', {
 	sendRpcRequest: (scope,method,params) =>  ipcRenderer.invoke("rsession:sendrpcrequest",scope,method,params),
 	getBinary: fileName => ipcRenderer.invoke("ressions:getbinary",fileName)
 })
+
+/** RSession API. */
+contextBridge.exposeInMainWorld('utilApi', {
+	getFilePath: relPath => ipcRenderer.invoke("utilapi:getfilepath",relPath)
+	
+})
