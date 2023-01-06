@@ -16,6 +16,12 @@
         </script>
         <script>
             
+            function randomIdString() {
+                //Make the biggest positive int random number possible (it doesn't have to be positive really)
+                //and express it as a string in the largest base possible
+                //Prefix with a letter ("f" for field) so we can use this as a field name symbol in R (as in data$f4j543k45) 
+                return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
+            }
 
             let eventHandle
             let eventIndex = 0
@@ -61,20 +67,23 @@
                     if(val !== null) rargs.push(keys[index] + "=" + `"${val}"`)
                 })
                 let acmd = `list(${rargs.join(",")})`
-                return `result <- executeCommand(state,${acmd}); if(result$success) state <- result$state else print("error: result$msg")`
+                return `newDocState <- executeCommand(docState,${acmd}); if(newDocState$success) docState <- newDocState else print("error: newDocState$msg")`
             }
 
+            let id1 = randomIdString()
+            let id2 = randomIdString()
+            let id3 = randomIdString()
             let apogeeCommands = [
-                {scope: 'rpc', method: 'execute_code', params: ["state <- list()"]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",null,"n","100")]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",null,"x","rnorm(n)")]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",null,"dummy","print(n);plot(1:n,x)")]},
-                {scope: 'rpc', method: 'execute_code', params: ["state$f1$value"]},
-                {scope: 'rpc', method: 'console_input', params: ["state$f1$value","n",0]},
-                {scope: 'rpc', method: 'console_input', params: ["state$f2$value","x",0]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("update","f1",null,"10000")]},
-                {scope: 'rpc', method: 'console_input', params: ["state$f1$value","n",0]},
-                {scope: 'rpc', method: 'console_input', params: ["state$f2$value","x",0]},
+                {scope: 'rpc', method: 'execute_code', params: ["docState <- list()"]},
+                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id1,"n","100")]},
+                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id2,"x","rnorm(n)")]},
+                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id3,"dummy","print(n);plot(1:n,x)")]},
+                {scope: 'rpc', method: 'execute_code', params: [`docState$fieldStates$${id1}$value`]},
+                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
+                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
+                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("update",id1,null,"10000")]},
+                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
+                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
                 {scope: 'rpc', method: 'console_input', params: ["xxx <- eval(parse_expr(\"{34;print(23);y+z}\"),list(y=5,z=100))","extra",0]},
                 {scope: 'rpc', method: 'console_input', params: ["xxx","x",0]},
             ]

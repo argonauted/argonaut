@@ -14,13 +14,13 @@ createErrorInfo <- function(type,...) {
 
 ## This function retrieves a vector of field name, with the associated name
 ## being the field id.
-getFieldNames <- function(state) {
-  fieldNames <- sapply(state,function(fieldRecord) fieldRecord$name)
+getFieldNames <- function(fieldStates) {
+  fieldNames <- sapply(fieldStates,function(fieldRecord) fieldRecord$name)
   fieldNames[ (!is.null(fieldNames)) & (fieldNames != "")]
 }
 
 
-checkNameValid <- function(state,name) {
+checkNameValid <- function(fieldStates,name) {
   ##-------------
   ## Must be character vector of length 1
   ##-------------
@@ -37,7 +37,7 @@ checkNameValid <- function(state,name) {
   ##------------
   ## Check the name is not in use
   ##------------
-  fieldNames <- getFieldNames(state)
+  fieldNames <- getFieldNames(fieldStates)
   if(name %in% fieldNames) return(errorReturn(sprintf("The name '%s' is in use",name)))
   
   ##if we get here we are OK

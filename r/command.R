@@ -7,7 +7,13 @@ source("compile.R")
 source("calculate.R")
 source("dependencies.R")
 
-executeCommand <- function(state,command) {
+## This function creates an empty docState
+createEmptyDocState <- function() {
+  list(success=TRUE,fieldStates=list(),commandNumber=0)
+}
+
+##This function executes a command to update the doc state
+executeCommand <- function(docState,command,doRecalc=TRUE) {
   
   commandNumber <- getCommandNumber()
   
@@ -20,49 +26,66 @@ executeCommand <- function(state,command) {
            commandNumber=commandNumber)
   }
   
-  tryCatch({
+  ##tryCatch({
     cmdFunction <- commandList[[command$type]]
-    result <- cmdFunction(state,command,commandNumber)
+    resultDocState <- cmdFunction(docState$fieldStates,command,commandNumber)
     
     ## set the command number on the output
-    result$commandNumber <- commandNumber
+    resultDocState$commandNumber <- commandNumber
     
-    if(result$success) {
-      ## recalculate the state
-      ## retain any other fields fom the command result (like id for create)
-      result$state <- recalculateState(result$state,commandNumber)
+    if(resultDocState$success) {
+
+      ## complete the state - update or determine the eval list
+      resultDocState <- updateState(resultDocState,commandNumber,doRecalc=doRecalc)
       
-      result
+      resultDocState
     }
     else {
       ##result from cmd function is our error state
-      result
+      resultDocState
     }
-  },
-  error=function(err) {
-    errorReturn(sprintf("Unknown error running command: %s",as.character(err)),
-                err=err,
-                commandNumber=commandNumber)
-  })
+  ##},
+  ##error=function(err) {
+  ##  errorReturn(sprintf("Unknown error running command: %s",as.character(err)),
+  ##              err=err,
+  ##              commandNumber=commandNumber)
+  ##})
 }
 
-## make a new id, starting at 1
-lastIdInt <- 0L
-createId <- function() {
-  lastIdInt <<- lastIdInt + 1L
-  sprintf("f%i",lastIdInt)
+## This function 
+calculateField <- function(docState,id) {
+  ## require that there is an eval list and that the id evaluated is the first in the eval list.
+  if(is.null(docState$evalList)) {
+    return(errorReturn("Eval list missing!"),
+           commandNumber=docState$commandNumber)
+  } 
+  if(docState$evalList[1] != id) {
+    return(errorReturn(sprintf("Evaluation out of order! expected id=%s, evaluating id=%s",docState$evalList[1],id),
+           commandNumber=docState$commandNumber))
+  }
+  
+  docState <- updateField(docState,id,doRecalc=TRUE,errorForDirtyDependsOn=TRUE)
+  if(length(docState$evalList) > 1) {
+    docState$evalList <- tail(docState$evalList,-1)
+  }
+  else {
+    docState$evalList <- NULL
+  }
+  
+  docState
 }
 
-lastCommandNumber <- 0L
-getCommandNumber <- function() {
-  lastCommandNumber <<- lastCommandNumber + 1L
+## looks up the id for a given name
+getIdWithName <- function(fieldStates,name) {
+  for(fieldRecord in fieldStates) {
+    if(fieldRecord$name == name) return(fieldRecord$id)
+  }
+  NULL
 }
 
-## This resets the ids. It should not be done in normal usage
-## It is just intended for testing.
-resetIds <- function() {
-  lastIdInt <<- 0L
-}
+##===============================
+## Testing Code
+##===============================
 
 ## This resets the command numbers. It should not be done in normal usage
 ## It is just intended for testing.
@@ -70,16 +93,37 @@ resetCommandNumber <- function() {
   lastCommandNumber <<- 0L
 }
 
+## This resets the ids. It should not be done in normal usage
+## It is just intended for testing.
+#resetIds <- function() {
+#  lastIdInt <<- 0L
+#}
+
+##=======================
+## internal functions
+##=======================
+
+## make a new id, starting at 1
+##lastIdInt <- 0L
+##createId <- function() {
+##  lastIdInt <<- lastIdInt + 1L
+##  sprintf("f%i",lastIdInt)
+##}
+
+lastCommandNumber <- 0L
+getCommandNumber <- function() {
+  lastCommandNumber <<- lastCommandNumber + 1L
+}
+
 ## This is the command list
 ## Any command should be added here
 commandList = list()
 
-##===============================
+##-------------------------------
 ## Command Implementations
-##===============================
+##-------------------------------
 ## Command functions should update the state so that it is consistent
-## but it can include dirty fields (if applicable). The state will be 
-## recalculated in the executeCommand function.
+## but it can include dirty fields (if applicable). 
 ##
 ## It should be assumed that only one field will have its name or code fields
 ## changed at a time. The only other fields that change should be
@@ -92,12 +136,13 @@ commandList = list()
 ## The return value of the field should be a list with the following entries:
 ## - success - TRUE or FALSE (required)
 ## - msg - this is the error message success = false (optional)
-## - state - this is the updated state after the command
+## - fieldstates - this are the updated field states after the command
 ## - ... - other fields will be returned to the caller of executeCommand
 
 ## This command creates a new field
 ## content:
 ## - $type <- "delete" (required)
+## - $id <- id for the new fields (required)
 ## - $name <- new name for a field (optional - include if the field has a name)
 ## - $code <- code for a field (required)
 ## - $argList <- argList included for function, omitted for data (optional)
@@ -107,13 +152,26 @@ commandList = list()
 ## If only an argList is passed, it will be ignored.
 ##
 ## If a field is given no name, it can not be referenced by other fields, but it
-## can create an output value. TO do this, do not set a name on the field. (Or
+## can create an output value. To do this, do not set a name on the field. (Or
 ## alternately, a value of "" can be set.)
-commandList$create <- function(state,command,commandNumber) {
+commandList$create <- function(fieldStates,command,commandNumber) {
   
   ## id
-  id <- createId()
-  state[[id]] <- list(id=id)
+  if(!"id" %in% names(command) ) {
+    return(errorReturn("Field id missing from create command"))
+  }
+  
+  id <- command$id
+  if(identical(id,"")) {
+    return(errorReturn("Id can not be an empty string"))
+  }
+  if(id %in% names(fieldStates)) {
+    return(errorReturn(sprintf("Id is alredy in use: %s", id)))
+  }
+
+      
+  
+  fieldStates[[id]] <- list(id=id)
   
   ## set name
   if( ("name" %in% names(command))&&(!identical(command$name,"")) ) {
@@ -121,50 +179,51 @@ commandList$create <- function(state,command,commandNumber) {
     ##---------
     ## Set an empty name as a placeholder.
     ## I'm doing this just because in the name check below I get the names of
-    ## all the fields in the state, and this record would otherwise have an
+    ## all the fields in the fieldStates, and this record would otherwise have an
     ## invalid value NULL.
     ## I should probably get a better solution,
     ## Maybe the record should be created below with all valid fields?
     ## The only thing stopping me now is this could have its own issues.
-    state[[id]]$name <- ""
+    fieldStates[[id]]$name <- ""
     ##---------
     
     ##check for valid name
-    nameReturn <- checkNameValid(state,command$name)
+    nameReturn <- checkNameValid(fieldStates,command$name)
     if(!nameReturn$success) {
       return(nameReturn)
     }
     
-    state[[id]]$name <- command$name
+    fieldStates[[id]]$name <- command$name
     ##check for remote dependency change due to name change
-    state <- remoteDependencyNameCheck(state,
+    fieldStates <- remoteDependencyNameCheck(fieldStates,
                                        newName=command$name,
                                        fromId=id,
                                        commandNumber=commandNumber)
   }
   else {
     ## use empty string as a placeholder for no name
-    state[[id]]$name <- ""
+    fieldStates[[id]]$name <- ""
   }
   
   ## set code
   if("code" %in% names(command)) {
-    state <- setFieldCode(state,id,command)
+    fieldStates <- setFieldCode(fieldStates,id,command)
   }
   else {
     return(errorReturn("The create command requires the field 'code'"))
   }
   
   ## command number for command that updated field
-  state[[id]]$commandNumber <- commandNumber 
+  fieldStates[[id]]$commandNumber <- commandNumber 
   
-  successReturn(state=state,id=id)
+  ##successReturn(fieldStates=fieldStates)
+  successReturn(fieldStates=fieldStates,id=id)
 } 
 
 ## This command updates a field
 ## content:
 ## - $type <- "delete" (required)
-## - $id <- id of field to delete (required)
+## - $id <- id of field to update (required)
 ## - $name <- new name for a field (optional - include if the field name changes)
 ## - $code <- code for a field (optional - include if the field code and/or argList change)
 ## - $argList <- argList for a field (optional - include if the field code and/or the argList change)
@@ -175,35 +234,35 @@ commandList$create <- function(state,command,commandNumber) {
 ## If the code is included with no argList a "data" field will be created.
 ## If code is included with an argList a "function" field will be created.
 ## If only an argList is passed, it will be ignored.
-commandList$update <- function(state,command,commandNumber) {
+commandList$update <- function(fieldStates,command,commandNumber) {
   if( !("id" %in% names(command)) ) {
-    return(errorResult("Field id missing from update command"))
+    return(errorReturn("Field id missing from update command"))
   }
   
   id <- command$id
   
-  if( !(id %in% names(state)) ) {
-    return(errorReturn("id not found in state list"))
+  if( !(id %in% names(fieldStates)) ) {
+    return(errorReturn("id not found in fieldStates list"))
   }
   
   updated <- FALSE
   
   ##set name, if needed
-  if( ("name" %in% names(command))&&(!identical(command$name,state[[id]]$name)) ) {
+  if( ("name" %in% names(command))&&(!identical(command$name,fieldStates[[id]]$name)) ) {
     
     ##check for valid name (empty string OK here since this means no name)
     if(!identical(command$name,"")) {
-      nameReturn <- checkNameValid(state,command$name)
+      nameReturn <- checkNameValid(fieldStates,command$name)
       if(!nameReturn$success) {
         return(nameReturn)
       }
     }
     
-    oldName <- state[[id]]$name
-    state[[id]]$name <- command$name
+    oldName <- fieldStates[[id]]$name
+    fieldStates[[id]]$name <- command$name
     updated <- TRUE
     
-    state <- remoteDependencyNameCheck(state,
+    fieldStates <- remoteDependencyNameCheck(fieldStates,
                                        oldName=oldName,
                                        newName=command$name,
                                        fromId=id,
@@ -212,7 +271,7 @@ commandList$update <- function(state,command,commandNumber) {
   
   ## set code (and type), if needed
   if("code" %in% names(command)) {
-    state <- setFieldCode(state,id,command)
+    fieldStates <- setFieldCode(fieldStates,id,command)
     
     ##later figure out if there was a real change?
     updated <- TRUE
@@ -220,36 +279,36 @@ commandList$update <- function(state,command,commandNumber) {
   
   ## command number for command that updated field
   if(updated) {
-    state[[id]]$commandNumber <- commandNumber
+    fieldStates[[id]]$commandNumber <- commandNumber
   }
 
-  successReturn(state=state)
+  successReturn(fieldStates=fieldStates)
 } 
 
 ## This command deletes a field
 ## content:
 ## - $type <- "delete" (required)
 ## - $id <- id of field to delete (required)
-commandList$delete <- function(state,command,commandNumber) {
+commandList$delete <- function(fieldStates,command,commandNumber) {
   if( !("id" %in% names(command)) ) {
     return(errorReturn("id missing from command"))
   }
-  if( !(command$id %in% names(state)) ) {
-    return(errorReturn("id not found in state list"))
+  if( !(command$id %in% names(fieldStates)) ) {
+    return(errorReturn("id not found in fieldStates list"))
   }
   
-  oldName <- state[[command$id]]$name
+  oldName <- fieldStates[[command$id]]$name
   
-  ## remove from state
-  state[command$id] <- NULL
+  ## remove from fieldStates
+  fieldStates[command$id] <- NULL
   
   ##check for remote dependency change due to name change
-  state <- remoteDependencyNameCheck(state,
+  fieldStates <- remoteDependencyNameCheck(fieldStates,
                                      oldName=oldName,
                                      fromId=command$id,
                                      commandNumber=commandNumber)
   
-  successReturn(state=state)
+  successReturn(fieldStates=fieldStates)
 } 
 
 ##===============================
@@ -259,8 +318,8 @@ commandList$delete <- function(state,command,commandNumber) {
 ## This function sets the cpompiled code fields for a record
 ## including the dependencies
 ## In the case of a parse error, it sets the status to "error"
-setFieldCode <- function(state,id,command) {
-  fieldRecord <- state[[id]]
+setFieldCode <- function(fieldStates,id,command) {
+  fieldRecord <- fieldStates[[id]]
   
   if("argList" %in% names(command)) {
     fieldRecord$type <- "function"
@@ -280,11 +339,11 @@ setFieldCode <- function(state,id,command) {
   if(codeInfo$success) {
     fieldRecord$fieldExpr <- codeInfo$expr
     fieldRecord$extRef <- codeInfo$extRef
-    fieldRecord <- setDependsOn(state,fieldRecord)
+    fieldRecord <- setDependsOn(fieldStates,fieldRecord)
     fieldRecord$status <- "dirty"
     fieldRecord$errorInfo <- NULL
     
-    state[[id]] <- fieldRecord
+    fieldStates[[id]] <- fieldRecord
   }
   else {
     ##clear the code values and mark an error
@@ -297,60 +356,11 @@ setFieldCode <- function(state,id,command) {
     fieldRecord$value <- NA
   }
   
-  state[[id]] <- fieldRecord
+  fieldStates[[id]] <- fieldRecord
 
-  state
-}
-
-##===============================
-## Testing Code
-##===============================
-
-## These are our commands
-getIdWithName <- function(state,name) {
-  for(fieldRecord in state) {
-    if(fieldRecord$name == name) return(fieldRecord$id)
-  }
-  NULL
+  fieldStates
 }
 
 
-runTest <- function() {
-  state <- list()
-  
-  code_a_1 <- '100'
-  c1 <- list(type="create",name="a",code=code_a_1)
-  result <- executeCommand(state,c1)
-  
-  state <- result$state
-  
-  code_foo_1 <- '2*x'
-  argList_foo_1 <- "x"
-  c2 <- list(type="create",name="foo",code=code_foo_1,argList=argList_foo_1)
-  result <- executeCommand(state,c2)
-  
-  state <- result$state
-  
-  code_c_1 <- '300'
-  c4 <- list(type="create",name="c",code=code_c_1)
-  result <- executeCommand(state,c4)
-  cId <- result$id
-  
-  state <- result$state
-  
-  code_c_2 <- '2 + a + d'
-  c5 <- list(type="update",id=cId,name="cAlt",code=code_c_2)
-  result <- executeCommand(state,c5)
-  
-  state <- result$state
-  
-  code_d_1 <- '35'
-  c6 <- list(type="create",name="d",code=code_d_1)
-  result <- executeCommand(state,c6)
-  
-  print(result)
-}
-
-##runTest()
   
 

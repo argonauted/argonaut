@@ -1,8 +1,8 @@
 
 source("stateUtil.R")
 
-setDependsOn <- function(state,fieldRecord) {
-  fieldNames <- getFieldNames(state)
+setDependsOn <- function(fieldStates,fieldRecord) {
+  fieldNames <- getFieldNames(fieldStates)
   flags <- fieldNames %in% fieldRecord$extRef 
   fieldRecord$dependsOnNames <- fieldNames[flags]
   fieldRecord$dependsOnIds <- names(fieldNames)[flags]
@@ -19,23 +19,23 @@ clearDependsOn <- function(fieldRecord) {
 ## This function only works for 0 or 1 added or removed names.
 ## If a value of "" is passed in for a name, this will be ignored. (It represents
 ## a field with no name, and can have no dependencies.)
-remoteDependencyNameCheck <- function(state,oldName="",newName="",fromId=id,commandNumber) {
+remoteDependencyNameCheck <- function(fieldStates,oldName="",newName="",fromId=id,commandNumber) {
   if((length(oldName) > 1)||(length(newName) > 1)) {
     stop("This function should only be called with a single name!")
   }
   
-  for(id in names(state)) {
+  for(id in names(fieldStates)) {
     if(id != fromId) {
-      state <- dependencyNameCheck(state,id,oldName,newName,commandNumber)
+      fieldStates <- dependencyNameCheck(fieldStates,id,oldName,newName,commandNumber)
     }
   }
   
-  state
+  fieldStates
 }
 
-dependencyNameCheck <- function(state,id,oldName="",newName="",commandNumber) {
+dependencyNameCheck <- function(fieldStates,id,oldName="",newName="",commandNumber) {
   
-  fieldRecord <- state[[id]]
+  fieldRecord <- fieldStates[[id]]
   
   if( ((!identical(oldName,"")) && (oldName %in% fieldRecord$dependsOnNames)) ||
       ((!identical(newName,"")) && (newName %in% fieldRecord$extRef)) ) {
@@ -44,15 +44,15 @@ dependencyNameCheck <- function(state,id,oldName="",newName="",commandNumber) {
     
     ##just recalculate the dependencies
     ##(it might be better to reuse the field names rather than recalculate them each time)
-    fieldRecord <- setDependsOn(state,fieldRecord)
+    fieldRecord <- setDependsOn(fieldStates,fieldRecord)
     fieldRecord$status <- "dirty"
     fieldRecord$errorInfo <- NULL
     fieldRecord$commandNumber <- commandNumber
     
-    state[[id]] <- fieldRecord
+    fieldStates[[id]] <- fieldRecord
   }
   
-  state
+  fieldStates
 }
 
 
