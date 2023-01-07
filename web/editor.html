@@ -50,7 +50,7 @@
             function loadScripts() {
                 utilApi.getFilePath("../r").then(dirPath => {
                     console.log("Loading scripts")
-                    let cmd = {scope: 'rpc', method: 'console_input', params: [`setwd(${JSON.stringify(dirPath)}); source("command.R")`,"",0]}
+                    let cmd = {scope: 'rpc', method: 'console_input', params: [`setwd(${JSON.stringify(dirPath)}); source("entry.R")`,"",0]}
                     sendCommand(cmd)
                 })
             }
@@ -67,7 +67,7 @@
                     if(val !== null) rargs.push(keys[index] + "=" + `"${val}"`)
                 })
                 let acmd = `list(${rargs.join(",")})`
-                return `newDocState <- executeCommand(docState,${acmd}); if(newDocState$success) docState <- newDocState else print("error: newDocState$msg")`
+                return `executeApogeeCommand(${acmd})`
             }
 
             let id1 = randomIdString()
@@ -75,17 +75,17 @@
             let id3 = randomIdString()
             let apogeeCommands = [
                 {scope: 'rpc', method: 'execute_code', params: ["docState <- list()"]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id1,"n","100")]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id2,"x","rnorm(n)")]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("create",id3,"dummy","print(n);plot(1:n,x)")]},
-                {scope: 'rpc', method: 'execute_code', params: [`docState$fieldStates$${id1}$value`]},
-                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
-                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
-                {scope: 'rpc', method: 'execute_code', params: [getApogeeCommand("update",id1,null,"10000")]},
-                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
-                {scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
-                {scope: 'rpc', method: 'console_input', params: ["xxx <- eval(parse_expr(\"{34;print(23);y+z}\"),list(y=5,z=100))","extra",0]},
-                {scope: 'rpc', method: 'console_input', params: ["xxx","x",0]},
+                {scope: 'rpc', method: 'execute_r_code', params: [getApogeeCommand("create",id1,"n","100")]},
+                {scope: 'rpc', method: 'execute_r_code', params: [getApogeeCommand("create",id2,"x","rnorm(n)")]},
+                {scope: 'rpc', method: 'execute_r_code', params: [getApogeeCommand("create",id3,"dummy","print(n);plot(1:n,x)")]},
+                //{scope: 'rpc', method: 'execute_code', params: [`docState$fieldStates$${id1}$value`]},
+                //{scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
+                //{scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
+                {scope: 'rpc', method: 'execute_r_code', params: [getApogeeCommand("update",id1,null,"10000")]},
+                //{scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id1}$value`,"n",0]},
+                //{scope: 'rpc', method: 'console_input', params: [`docState$fieldStates$${id2}$value`,"x",0]},
+                //{scope: 'rpc', method: 'console_input', params: ["xxx <- eval(parse_expr(\"{34;print(23);y+z}\"),list(y=5,z=100))","extra",0]},
+                //{scope: 'rpc', method: 'console_input', params: ["xxx","x",0]},
             ]
 
             function runApogeeSequence() {
@@ -93,10 +93,45 @@
                     console.log("###############################")
                     console.log("SENDING COMMAND: " + JSON.stringify(apogeeCommands[commandIndex]))
                     console.log("###############################")
-                    sendCommand(apogeeCommands[commandIndex])
+                    if(apogeeCommands[commandIndex].method == 'execute_r_code') {
+                        sendApogeeCommand(apogeeCommands[commandIndex])
+                    }
+                    else {
+                        sendCommand(apogeeCommands[commandIndex])
+                    }
                     commandIndex++
                     setTimeout(runApogeeSequence,1000)
                 }
+            }
+
+            function sendApogeeCommand(cmd) {
+                rSessionApi.sendRpcRequest(cmd.scope,cmd.method,cmd.params).then(response => {
+                    try {
+                        result = JSON.parse(response.data.result)
+                        if(result.success) {
+                            console.log("Success! eval list = " + JSON.stringify(result.evalList))
+                            result.evalList.forEach(fieldId => evaluateField(fieldId))
+                        }
+                        else {
+                            console.log("Error executing command: " + result.msg)
+                        }
+                    }
+                    catch(e) {
+                        console.log("Unknown error processing response: " + e.toString())
+                    }
+                }).catch(e => {
+                    if(e) console.log(e.toString())
+                    else console.log("Unknown error in request")
+                })
+            }
+
+            function evaluateField(fieldId) {
+                let cmd = {
+                    scope: 'rpc',
+                    method: 'console_input',
+                    params: [`calculateApogeeField("${fieldId}")`,fieldId,0]
+                }
+                sendCommand(cmd)
             }
 
             //----------------------
@@ -115,10 +150,9 @@
                 {scope: 'rpc', method: 'get_object_contents', params: ["y"]},
                 {scope: 'rpc', method: 'console_input', params: ["y"]},
                 {scope: 'rpc', method: 'execute_r_code', params: ["paste(\"[\",paste(c(\"asdf\",\"nnnn\",\"ffff\"),collapse=\",\"),\"]\",sep=\"\")"]},
-                {scope: 'rpc', method: 'execute_code', params: ["n; plot(1:n,x);\"hello\";45"]},
-                {scope: 'rpc', method: 'console_input', params: ["n;plot(1:n,x)","xxx",0]},
-                {scope: 'rpc', method: 'execute_code', params: ["plot(rnorm(100000),rnorm(100000),t=\"l\")"]},
-                {scope: 'rpc', method: 'console_input', params: ["352345","xxx",0]},  
+                {scope: 'rpc', method: 'execute_code', params: ["n; plot(1:n,x);print(\"hello\");45"]},
+                {scope: 'rpc', method: 'execute_code', params: ["n; plot(1:n,x);print(\"hello\");45"]},
+                {scope: 'rpc', method: 'console_input', params: ["n; plot(1:n,x);print(\"hello\");45","sdfs",0]}
             ]
 
             function simpleCommandSequence() {
