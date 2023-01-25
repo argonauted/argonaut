@@ -21,6 +21,14 @@
             let continueEvents = true
 
             let DUMMY_CMD = {scope: 'rpc', method: 'console_input', params: ["111","",0]}
+
+            const MESSAGE_START1 = '[1] "|$($|'
+            const MESSAGE_START2 = ' "|$($|'
+            const MESSAGE_END = '|$)$|"'
+            const MESSAGE_PREFIX1 = '[1] '
+            const MESSAGE_PREFIX2 = ' '
+            const MESSAGE_HEADER = '|$($|'
+            const MESSAGE_FOOTER = '|$)$|'
             
             //-----------------------------
             // main functions
@@ -73,16 +81,24 @@
             ]
 
             let BASIC_REPDOC_SEQUENCE = [
-                {scope: 'rpc', method: 'execute_r_code', params: ['require(repdoc)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['initializeSession()']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['initializeDocState("ds1")']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l1","set.seed(123)",0)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l2","n <- 100",1)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l3","x <- rnorm(n)",2)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l4","x",3)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l5","hist(x)",4)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['updateCmd("ds1","l2","n <- 10")']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['deleteCmd("ds1","l1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['require(repdoc)']},
+                {scope: 'rpc', method: 'execute_code', params: ['initializeSession()']},
+                {scope: 'rpc', method: 'execute_code', params: ['initializeDocState("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l1","set.seed(123)",0)']},
+                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l2","n <- 100",1)']},
+                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l3","x <- rnorm(n)",2)']},
+                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l4","x",3)']},
+                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l5","hist(x)",4)']},
+                {scope: 'rpc', method: 'execute_code', params: ['updateCmd("ds1","l2","n <- 10")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['deleteCmd("ds1","l1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
+                {scope: 'rpc', method: 'execute_code', params: ['evaluate("ds1")']},
                 // this was to test a long running plot
                 //{scope: 'rpc', method: 'execute_code', params: ['plot(rnorm(100000),rnorm(100000),t=\"l\")'],nPostDelta: true},
                 //{scope: 'rpc', method: 'execute_code', params: ['print("ssdf")']},
@@ -92,12 +108,12 @@
                 //{scope: 'rpc', method: 'execute_r_code', params: ['points(1:5,rnorm(5),col="blue")']},
 
                 //testing stop and message
-                {scope: 'rpc', method: 'console_input', params: ['addCmd("ds1","l6","message(\\"This is an error message\\")",4)','',0]},
-                {scope: 'rpc', method: 'console_input', params: ['addCmd("ds1","l7","stop(\\"This is in a stop\\")",5)','',0]},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l8","message(\\"This is an error message\\")",6)']},
-                {scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l9","stop(\\"This is in a stop\\")",7)']},
-                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l10","message(\\"This is an error message\\")",8)']},
-                {scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l11","stop(\\"This is in a stop\\")",9)']},
+                //{scope: 'rpc', method: 'console_input', params: ['addCmd("ds1","l6","message(\\"This is an error message\\")",4)','',0]},
+                //{scope: 'rpc', method: 'console_input', params: ['addCmd("ds1","l7","stop(\\"This is in a stop\\")",5)','',0]},
+                //{scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l8","message(\\"This is an error message\\")",6)']},
+                //{scope: 'rpc', method: 'execute_r_code', params: ['addCmd("ds1","l9","stop(\\"This is in a stop\\")",7)']},
+                //{scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l10","message(\\"This is an error message\\")",8)']},
+                //{scope: 'rpc', method: 'execute_code', params: ['addCmd("ds1","l11","stop(\\"This is in a stop\\")",9)']},
             ]
 
             function startAppCode() {
@@ -300,10 +316,40 @@
                                 })
                             }
 
-                            // else if(entry.type == "console_output") {
-                            //     console.log("console output:")
-                            //     console.log(entry.data.text)
-                            // }
+                            else if(entry.type == "console_output") {
+                                let lines = entry.data.text.split("\n")
+                                lines.forEach(line => {
+                                    //I don't know why, but the session messages seem to end up inn two different formats
+                                    //when they come out the console
+                                    if(line.endsWith(MESSAGE_END)) {
+                                        let msgChars = null
+                                        if(line.startsWith(MESSAGE_START1)) {
+                                            msgChars = JSON.parse(line.slice(MESSAGE_PREFIX1.length))
+                                        }
+                                        else if(line.startsWith(MESSAGE_START2)) {
+                                            msgChars = JSON.parse(line.slice(MESSAGE_PREFIX2.length))
+                                        }
+
+                                        if(msgChars !== null) {
+                                            try {
+                                                //parse the total message string
+                                                let msgJson = JSON.parse(msgChars.slice(MESSAGE_HEADER.length,-MESSAGE_FOOTER.length))
+                                                console.log("Session Message: ")
+                                                console.log(JSON.stringify(msgJson,null,4))
+                                            }
+                                            catch(error) {
+                                                console.error("Error parsing msg body from session: " + error.toString())
+                                            }
+                                            return
+                                        }
+                                    }
+
+                                    //this is a console message line
+                                    else {
+                                        console.log("> " + line)
+                                    }
+                                })
+                            }
                             // else if(entry.type == "console_wite_prompt") {
                             //     console.log("console prompt:")
                             //     console.log(entry.data)
