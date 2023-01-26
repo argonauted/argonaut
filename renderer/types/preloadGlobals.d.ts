@@ -3,7 +3,7 @@ export interface IRSessionApi {
   getBinary: (fileName: string) => Promise<Object>
 }
 
-export interface IUtilApit {
+export interface IUtilApi {
   getFilePath: (relPath: string) => Promise<string>
 }
 

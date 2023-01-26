@@ -5,7 +5,7 @@ import path from 'path'
 
 let windows = []
 
-const APP_FILE = "../web/editor.html"
+const APP_FILE = "./renderer/web/index.html"
 
 let rSession = new RSession()
 

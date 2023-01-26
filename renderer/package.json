@@ -1,0 +1,23 @@
+{
+  "name": "redit-dev",
+  "version": "2.0.0-DEV-VERSION",
+  "description": "Test program for r session",
+  "main": "./dist/base/main.js",
+  "scripts": {
+    "tsc": "..\\node_modules\\.bin\\tsc.cmd -p tsconfig.json -noEmit",
+    "build": ".\\node_modules\\.bin\\esbuild .\\src\\app\\demo.ts --bundle --outfile=.\\dist\\out.js"
+  },
+  "dependencies": {
+    "@codemirror/lang-html": "^6.0.0",
+    "@codemirror/language": "^6.3.0",
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@lezer/common": "^1.0.0",
+    "@lezer/highlight": "^1.0.0",
+    "codemirror": "^6.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.17.4"
+  },
+  "author": "Dave Sutter"
+}
