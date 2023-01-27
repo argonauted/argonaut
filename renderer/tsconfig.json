@@ -2,7 +2,6 @@
   "compilerOptions": {
     "lib": ["es6", "dom", "scripthost"],
     "stripInternal": true,
-    "typeRoots": ["./node_modules/@types"],
     "noUnusedLocals": true,
     "strict": true,
     "target": "es6",
@@ -10,5 +9,5 @@
     "newLine": "lf",
     "moduleResolution": "node",
   },
-  "include": ["src/**/*.ts", "types/*.d.ts"],
+  "include": ["src/**/*.ts","types/*.ts"],
 }
