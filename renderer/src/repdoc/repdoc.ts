@@ -16,7 +16,7 @@ export const repdoc = (): Extension => {
             }
             else {
                 //send commands to the model, if needed
-                return sendCommands(cellState,transaction.state)
+                return sendCommands(transaction.state,cellState)
             }
         },
         provide(cellState) {
@@ -112,10 +112,14 @@ class CellInfo {
         return new CellInfo(cellInfo.id,cellInfo.status,from,to,cellInfo.docCode,cellInfo.modelCode,cellInfo.decoration,placedDecoration)
     }
 
+    //================================================================
+    // THis is a stand in. We will need to send the proper update or add command and track the state.
+    //================================================================
     static tempSendCommandFunction(cellInfo: CellInfo): CellInfo {
         let status = "clean"
         let modelCode = cellInfo.docCode
-        //no command for now, just change cell info
+        //no command for now, just print message and change cell info
+        console.log("Create/Uupdate " + cellInfo.id)
         let decoration = Decoration.widget({
             widget: new CellDisplay(cellInfo.id,status,modelCode),
             block: true,
@@ -142,23 +146,8 @@ type CellState = {
 
 type CellUpdateInfo = {
     cellInfo: CellInfo
-    changed: boolean
-    newStart: number
-}
-
-class PreviousCellsLink {
-    readonly cellMap: Record<number,CellUpdateInfo> = {}  //this is mapping to CellUpdateInfo with key = location in _new_ document
-    readonly cellsToDelete: CellInfo[] = []
-
-    constructor(cellMap: Record<number,CellUpdateInfo>,cellsToDelete: CellInfo[]) {
-        this.cellMap = cellMap
-        this.cellsToDelete = cellsToDelete
-    }
-
-    /** This looks for cell update info corresponding to position "fromPos" in the new document */
-    getCellUpdateInfo(fromPos: number): CellUpdateInfo | undefined {
-        return this.cellMap[fromPos]
-    }
+    doUpdate: boolean
+    doRemap: boolean
 }
 
 //===================================
@@ -167,69 +156,58 @@ class PreviousCellsLink {
 
 /** This method processes a new or updated editor state */
 function processUpdate(editorState: EditorState, cellInfoArray: CellInfo[] | null = null, changes: ChangeSet | null = null) {
-    let previousCellsLink: PreviousCellsLink | null = null
-    if((cellInfoArray !== null)&&(changes !== null)) {
-        previousCellsLink = getPreviousCellsLink(cellInfoArray!,changes!)
-    }
-
-    let cellState = updateCellState(editorState, previousCellsLink)
-
-    //send commands to the model, if needed
-    cellState = sendCommands(cellState,editorState)
-
+    let {cellUpdateMap, cellsToDelete} = getUpdateInfo(cellInfoArray,changes)
+    let cellState = updateCellState(editorState, cellUpdateMap)
+    cellState = sendCommands(editorState,cellState,cellsToDelete)
     return cellState
 }
 
-//cycle through the old cell state
-// - for cells with no changes - they will be remapped
-// - for cells with changes starting after beginning and ending before or after end - they will be updated
-// - for cells with changed starting before beginning and ending before or after the end - they will be deleted
-function getPreviousCellsLink(cellInfoArray: CellInfo[], changes: ChangeSet) {
-
-    let cellMap: Record<number,CellUpdateInfo> = {}
+function getUpdateInfo(cellInfoArray: CellInfo[] | null, changes: ChangeSet | null) {
+    let cellUpdateMap: Record<number,CellUpdateInfo> = {}
     let cellsToDelete: CellInfo[] = []
 
-    //see how a cell changes
-    cellInfoArray.forEach( (cellInfo) => {
-        changes.iterChangedRanges((fromOld,toOld,fromNew,toNew) => {
-            if(fromOld < cellInfo.from) {
-                if(toOld < cellInfo.from) {
-                    //before the start of this cell - no info yet
-                    return
+    //get the update info for each cell
+    if((cellInfoArray !== null)&&(changes !== null)) {
+        cellInfoArray.forEach( (cellInfo) => {
+
+            let doDelete = false
+            let doUpdate = false
+            let doRemap = false
+
+            //check effect of all text edits on this line
+            changes.iterChangedRanges((fromOld,toOld,fromNew,toNew) => {
+                if(fromOld < cellInfo.from) {
+                    if(toOld < cellInfo.from) {
+                        //before the start of this cell - we need to remap
+                        doRemap = true
+                    }
+                    else {
+                        //overlaps cell start and maybe the end - delete this cell
+                        doDelete = true
+                    }
+                }
+                else if(fromOld <= cellInfo.to) {
+                    //change starts in cell, ends inside or after - update cell
+                    doUpdate = true
+                    doRemap = true //only end is remapped
                 }
                 else {
-                    //overlaps cell start and maybe the end - delete this cell
-                    deleteOldCell(cellInfo,cellsToDelete)
-                    return
-
+                    //beyond the end of this cell - no impact to the cell
+                    //doStartRemap = true
                 }
-            }
-            else if(fromOld <= cellInfo.to) {
-                //change starts in cell, ends inside or after - update cell
-                updateOldCell(cellInfo,true,cellMap,changes)
-                return
+            })
+
+            if(doDelete) {
+                cellsToDelete.push(cellInfo)
             }
             else {
-                //beyond the end of this cell - just remap the cell
-                updateOldCell(cellInfo,false,cellMap,changes)
-                return
+                let newFrom = doRemap ? changes.mapPos(cellInfo.from) : cellInfo.from
+                cellUpdateMap[newFrom] = {cellInfo,doUpdate,doRemap}
             }
         })
-    })
+    }
     
-    return new PreviousCellsLink(cellMap,cellsToDelete)
-}
-
-/** This function loads the cell transition info for a cell that either has been
- * updated or has not changed */
-function updateOldCell(cellInfo:CellInfo, changed: boolean, cellMap: Record<number,CellUpdateInfo>, changes: ChangeSet) {
-    let newFrom = changes.mapPos(cellInfo.from)
-    cellMap[newFrom] = {cellInfo: cellInfo, changed: changed, newStart: newFrom}
-}
-
-/** This function loads the cell transition info for a cell that will be deleted. */
-function deleteOldCell(cellInfo:CellInfo, cellsToDelete: CellInfo[]) {
-    cellsToDelete.push(cellInfo)
+    return {cellUpdateMap, cellsToDelete}
 }
 
 function createCellState(cellInfos: CellInfo[]): CellState {
@@ -257,7 +235,7 @@ function createCellState(cellInfos: CellInfo[]): CellState {
 //   - fpr cells not found in the transition info
 //     - create new decdoration and cell info (with a hook to send create command)
 // - leave a hook to send delete commands for cells that should be deleted
-function updateCellState(editorState: EditorState, previousCellsLink: PreviousCellsLink | null) { 
+function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,CellUpdateInfo> | null) { 
     const cellInfos: CellInfo[] = []
 
     //get the updated code blocks
@@ -274,20 +252,23 @@ function updateCellState(editorState: EditorState, previousCellsLink: PreviousCe
 
                 //try to look up if this is an existing cell
                 let cellUpdateInfo: CellUpdateInfo | undefined = undefined
-                if(previousCellsLink !== null) {
-                    cellUpdateInfo = previousCellsLink.getCellUpdateInfo(fromPos)
+                if(cellUpdateMap !== null) {
+                    cellUpdateInfo = cellUpdateMap[fromPos]
                 }
 
                 if(cellUpdateInfo !== undefined) {
                     let oldCellInfo = cellUpdateInfo!.cellInfo
 
-                    if(cellUpdateInfo!.changed) {
+                    if(cellUpdateInfo!.doUpdate) {
                         //update to a cell
                         newCellInfo = CellInfo.updateCellInfo(oldCellInfo,fromPos,toPos,codeText)
                     }
-                    else {
+                    else if(cellUpdateInfo!.doRemap) {
                         //no change to a cell - just remap
                         newCellInfo = CellInfo.remapCellInfo(oldCellInfo,fromPos,toPos)
+                    }
+                    else {
+                        newCellInfo = oldCellInfo
                     }
                 }
                 else {
@@ -300,16 +281,19 @@ function updateCellState(editorState: EditorState, previousCellsLink: PreviousCe
         }
     })
 
-    //send delete commands here?
-
-    //maybe put update commands here, instead fo later
-
     return createCellState(cellInfos)
 }
 
 //change to sendUpdateCommands?
-function sendCommands(cellState: CellState, editorState: EditorState) {
+function sendCommands(editorState: EditorState, cellState: CellState, cellsToDelete: CellInfo[] | null = null) {
     let selectionHead = editorState.selection.asSingle().main.head
+
+    //send all the delete commands if there are any
+    if(cellsToDelete !== null) {
+        cellsToDelete!.forEach(cellInfo => {
+            console.log("Delete " + cellInfo.id)
+        })    
+    } 
     
     let cellsToUpdate: number[] = []
     if(cellState.dirtyCells.length > 0) {
