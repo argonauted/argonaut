@@ -1,10 +1,16 @@
 import {startListener,addListener,initDoc} from "../session/sessionApi"
 
-import {EditorView, basicSetup} from "codemirror"
+import {EditorView} from "@codemirror/view"
+
+import {basicSetup} from "codemirror"
 import {markdown} from "../lang_markdown_sp/index"
 
-import {repdoc} from "../repdoc/repdoc"
+import {repdoc,passEvent} from "../repdoc/repdoc"
 
+//=========================
+// script
+//=========================
+let view: any = null
 
 //start the session
 addListener("initComplete",onInitComplete)
@@ -13,6 +19,10 @@ addListener("plotReceived",onPlotReceived)
 addListener("docStatus",onSessionMessage)
 addListener("evalStart",onSessionMessage)
 startListener()
+
+//=========================
+// functions
+//=========================
 
 function onInitComplete(eventName: string, data: any) {
   console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ INIT COMPLETE")
@@ -23,6 +33,8 @@ function onInitComplete(eventName: string, data: any) {
 function onConsole(eventName: string, data: any) {
   console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CONSOLE")
   console.log(JSON.stringify(data,null,4))
+
+  passEvent(view,eventName,data)
 }
 
 function onPlotReceived(eventName: string, data: any) {
@@ -41,7 +53,7 @@ function startEditor() {
 }
 
 function buildUi() {
-  ;(window as any).view = new EditorView({
+  view = new EditorView({
     doc: 'set.seed(234)',
     extensions: [
       basicSetup,
@@ -50,4 +62,6 @@ function buildUi() {
     ],
     parent: document.querySelector("#editorMD")!
   })
+
+  //;(window as any).view = view
 }

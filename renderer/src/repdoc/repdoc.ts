@@ -2,29 +2,44 @@ import {CodeCommand,multiCmd} from "../session/sessionApi"
 import {syntaxTree} from "@codemirror/language"
 import {WidgetType, EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Extension, Range, ChangeSet } from '@codemirror/state'
-import { RangeSet, StateField } from '@codemirror/state'
+import { RangeSet, StateField, StateEffect } from '@codemirror/state'
+
+export const sessionEventEffect = StateEffect.define<{type: string, data: any}>()
+
+export function passEvent(view: any, eventName: string, data: any) {
+    if(view !== null) {
+        let effects: StateEffect<any>[] = [sessionEventEffect.of({type:eventName,data:data})]
+        //if(!view.state.field(ReactiveCodeField,false)) {
+        //    effects.push(StateEffect.appendConfig.of([ReactiveCodeField]))
+        //}
+        view.dispatch({effects: effects})
+    }
+  }
+
+  const ReactiveCodeField = StateField.define<CellState>({
+    create(editorState) {
+        return processUpdate(editorState)
+    },
+    update(cellState, transaction) {
+        if (transaction.docChanged) {
+            return processUpdate(transaction.state,cellState.cellInfos,transaction.changes)
+        }
+        else if(transaction.effects.length > 0) {
+            console.log("There are effects!")
+            return cellState
+        }
+        else {
+            //send commands to the model, if needed
+            return issueCommands(transaction.state,cellState)
+        }
+    },
+    provide(cellState) {
+        return EditorView.decorations.from(cellState, cellState => cellState.decorations)
+    },
+})
 
 /** This is the extension to interface with the reactive code model and display the output in the editor */
 export const repdoc = (): Extension => {
-
-    const ReactiveCodeField = StateField.define<CellState>({
-        create(editorState) {
-            return processUpdate(editorState)
-        },
-        update(cellState, transaction) {
-            if (transaction.docChanged) {
-                return processUpdate(transaction.state,cellState.cellInfos,transaction.changes)
-            }
-            else {
-                //send commands to the model, if needed
-                return issueCommands(transaction.state,cellState)
-            }
-        },
-        provide(cellState) {
-            return EditorView.decorations.from(cellState, cellState => cellState.decorations)
-        },
-    })
-
     return [
         ReactiveCodeField,
     ]
