@@ -8,12 +8,31 @@ import {repdoc} from "../repdoc/repdoc"
 
 //start the session
 addListener("initComplete",onInitComplete)
+addListener("console", onConsole)
+addListener("plotReceived",onPlotReceived)
+addListener("docStatus",onSessionMessage)
+addListener("evalStart",onSessionMessage)
 startListener()
 
 function onInitComplete(eventName: string, data: any) {
   console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ INIT COMPLETE")
   console.log("Init complete!")
   setTimeout(startEditor,0)
+}
+
+function onConsole(eventName: string, data: any) {
+  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CONSOLE")
+  console.log(JSON.stringify(data,null,4))
+}
+
+function onPlotReceived(eventName: string, data: any) {
+  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ PLOT:")
+  console.log(JSON.stringify(data,null,4))
+}
+
+function onSessionMessage(eventName: string, data: any) {
+  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ SESSION MESSAGE")
+  console.log(JSON.stringify(data,null,4))
 }
 
 function startEditor() {

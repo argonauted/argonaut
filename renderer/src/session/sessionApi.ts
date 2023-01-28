@@ -19,6 +19,10 @@ let eventIndex = 0
 let firstPass = true
 let continueEvents = true
 
+let activeSession: string | null = null
+let activeLineId: string | null = null
+let lineActive: boolean = false
+
 export type SessionMsg = {
     type: string
     session: string
@@ -31,6 +35,13 @@ export type CodeCommand = {
     lineId: string,
     code?: string,
     after?: number
+}
+
+export type ConsoleEventData = {
+    session: string | null,
+    lineId: string | null,
+    type: string,
+    msgs: string[]
 }
 
 /** This is the format used in the sendCommand function for a RSession request. */
@@ -212,6 +223,9 @@ function onConsoleOut(text: string) {
                 try {
                     //parse the total message string
                     let msgJson = JSON.parse(msgChars.slice(MESSAGE_HEADER.length,-MESSAGE_FOOTER.length))
+                    //send message, but send any queued console lines first
+                    flushConsole(consoleLines)
+                    consoleLines = []
                     onSessionMsg(msgJson)
                 }
                 catch(error: any) {
@@ -225,21 +239,47 @@ function onConsoleOut(text: string) {
         }
     })
 
+    flushConsole(consoleLines)
+}
+
+function flushConsole(consoleLines: string[]) {
     if(consoleLines.length > 0) {
-        dispatch("stdout",consoleLines)
+        let data: ConsoleEventData = {
+            session: activeSession,
+            lineId: lineActive ? activeLineId : null, //console output only comes when a line is active 
+            type: "console",
+            msgs: consoleLines
+        }
+        dispatch("console",data)
     }
 }
 
 function onSessionMsg(msgJson: SessionMsg) {
     try {
         switch(msgJson.type) {
-            case "docStatus":
+            case "docStatus": {
+                //Doc status triggers the end of the current active line, if there is one
+                //Note that plot data can/will come in afterwards
+                //So keep the activeSession and associated activeLineId
+                lineActive = false
+                //Doc status also tells if there are more lines to evaluate
+                //This should be the same session as above, I think. If so, does enforcing that matter? 
+                if(msgJson.data.evalComplete === false) {
+                    //more lines to evaluate
+                    evaluateCmd(msgJson.session)
+                }
                 dispatch("docStatus",msgJson)
                 break
+            }
 
-            case "evalStart":
+            case "evalStart": {
+                //Eval start triggers a new active line
+                activeSession = msgJson.session
+                activeLineId = msgJson.data
+                lineActive = true
                 dispatch("evalStart",msgJson)
                 break
+            }
 
             default:
                 console.log("Unknown message: " + JSON.stringify(msgJson,null,4))
@@ -251,6 +291,16 @@ function onSessionMsg(msgJson: SessionMsg) {
             console.log("Error processing mesasge: " + err.toString() + " - " + msgJson.toString())
         }
     }
+}
+
+function onConsoleErr(msg: string) {
+    let data: ConsoleEventData = {
+        session: activeSession,
+        lineId: lineActive ? activeLineId : null, //console output only comes when a line is active 
+        type: "stderr",
+        msgs: [msg]       
+    }
+    dispatch("console",data)
 }
 
 //-------------------------
@@ -299,7 +349,7 @@ function getEvents() {
                 //     console.log(entry.data)
                 // }
                 else if(entry.type == "console_error") {
-                    dispatch("stderr",entry.data.text)
+                    onConsoleErr(entry.data.text)
                 }
                 // else {
                 //     console.log("Unkown: " + entry.type)
