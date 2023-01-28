@@ -164,9 +164,10 @@ function onInitComplete() {
 }
 
 function onPlotReceived(fileRef: string) {
-    window.rSessionApi.getBinary(fileRef).then(response => {
+    window.rSessionApi.getBinary(fileRef).then( (response: any) => {
         //console.log("Graphics file received:")
-        //console.log(JSON.stringify(response))   
+        //console.log(JSON.stringify(response.data))   
+        dispatch("plotReceived",{data: response.data})
     })
     .catch(err => {
     console.error("Error getting graphics file:")
@@ -281,11 +282,9 @@ function getEvents() {
                 //     console.log("console prompt:")
                 //     console.log(entry.data)
                 // }
-                // else if(entry.type == "console_write_input") {
-                //     console.log("console input:")
-                //     console.log(entry.data.text)
-                // }
-                
+                else if(entry.type == "console_error") {
+                    dispatch("stderr",entry.data.text)
+                }
                 // else {
                 //     console.log("Unkown: " + entry.type)
                 //     console.log(JSON.stringify(entry))

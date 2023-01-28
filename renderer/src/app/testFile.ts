@@ -4,24 +4,36 @@ import {startListener,addListener,initDoc,addCmd,updateCmd,deleteCmd,evaluateCmd
 export function runTest() {
     addListener("initComplete",onInitComplete)
     addListener("stdout", onStdOut)
+    addListener("stderr", onStdErr)
+    addListener("plotReceived",onPlotReceived)
     addListener("docStatus",onSessionMessage)
     addListener("evalStart",onSessionMessage)
     startListener()
 }
 
 function onStdOut(eventName: string, data: any) {
-    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CONSOLE:")
     console.log(data)
 }
 
+function onStdErr(eventName: string, data: any) {
+    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ ERROR:")
+    console.log(data)
+}
+
+function onPlotReceived(eventName: string, data: any) {
+    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ PLOT:")
+    console.log(JSON.stringify(data,null,4))
+}
+
 function onInitComplete(eventName: string, data: any) {
-    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ INIT COMPLETE")
     console.log("Init complete!")
     setTimeout(doTest,2000)
 }
 
 function onSessionMessage(eventName: string, data: any) {
-    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ SESSION MESSAGE")
     console.log(JSON.stringify(data,null,4))
 }
 
