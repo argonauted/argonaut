@@ -78,11 +78,26 @@ export function deleteCmd(docSessionId: string, lineId: string) {
 }
 
 export function multiCmd(docSessionId: string, cmds: CodeCommand[] ) {
-    throw new Error("implement multi command!")
+    let childCmdStrings = cmds.map(cmdToCmdListString)
+    let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
+    //let cmdString = `list(type="multi",cmds=${childCmdListString})`
+    sendRCommand(`multiCmd("${docSessionId}",${childCmdListString})`)
 }
 
 export function rawCmd(docSessionId: string, cmd: CodeCommand) {
-    throw new Error("implement raw command!")
+    sendRCommand(`executeCommand("${docSessionId}",${cmdToCmdListString(cmd)})`)
+}
+
+function cmdToCmdListString(cmd: CodeCommand) {
+    let cmdListString = `list(type="${cmd.type}",lineId="${cmd.lineId}"`
+    if(cmd.code !== undefined) {
+        cmdListString += `,code="${cmd.code}"`
+    }
+    if(cmd.after !== undefined) {
+        cmdListString += `,after=${cmd.after}`
+    }
+    cmdListString += ")"
+    return cmdListString
 }
 
 export function evaluateCmd(docSessionId: string) {
@@ -245,6 +260,7 @@ function onSessionMsg(msgJson: SessionMsg) {
 /** This function sends a generic RPC command. If the command includes a field "processResponse",
  * this is called to process the response. The response json is also printed. */
 function sendCommand(cmd: SessionRequestWrapper) {
+    console.log("Send command: " + JSON.stringify(cmd))
     window.rSessionApi.sendRpcRequest(cmd.scope,cmd.method,cmd.params).then( (response: SessionResponse) => {
         console.log("Command response: " + JSON.stringify(response))
 

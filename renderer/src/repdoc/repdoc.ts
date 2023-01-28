@@ -1,3 +1,4 @@
+import {CodeCommand,multiCmd} from "../session/sessionApi"
 import {syntaxTree} from "@codemirror/language"
 import {WidgetType, EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Extension, Range, ChangeSet } from '@codemirror/state'
@@ -16,7 +17,7 @@ export const repdoc = (): Extension => {
             }
             else {
                 //send commands to the model, if needed
-                return sendCommands(transaction.state,cellState)
+                return issueCommands(transaction.state,cellState)
             }
         },
         provide(cellState) {
@@ -34,11 +35,11 @@ export const repdoc = (): Extension => {
 //===================================
 
 class CellDisplay extends WidgetType {
-    id: number
+    id: string
     status: string
     code: string
 
-    constructor(id:number, status: string, code: string) { 
+    constructor(id:string, status: string, code: string) { 
         super() 
         this.id = id
         this.status = status
@@ -49,7 +50,8 @@ class CellDisplay extends WidgetType {
 
     toDOM() {
         let wrap = document.createElement("div")
-        wrap.style.backgroundColor = this.status == "clean" ? "lightblue" : "beige"
+        wrap.style.backgroundColor = this.status == "code dirty" ? "beige" :
+                                     this.status == "code clean" ? "white" : "lightblue"
         wrap.style.border = "1px solid black"
         wrap.innerHTML = this.id + ": " + this.code
         return wrap
@@ -60,7 +62,7 @@ class CellDisplay extends WidgetType {
 
 
 class CellInfo {
-    readonly id: number
+    readonly id: string
     readonly status: string
     readonly from: number
     readonly to: number
@@ -69,7 +71,7 @@ class CellInfo {
     readonly decoration: Decoration
     readonly placedDecoration: Range<Decoration>
 
-    private constructor(id: number, status: string, from: number,to: number,
+    private constructor(id: string, status: string, from: number,to: number,
             docCode: string, modelCode: string | null, 
             decoration: Decoration, placedDecoration: Range<Decoration>) {
         this.id = id
@@ -84,7 +86,7 @@ class CellInfo {
 
     static newCellInfo(from: number,to: number,docCode: string) {
         let id = CellInfo.getId()
-        let status = "dirty"
+        let status = "code dirty"
         let modelCode = null
         let decoration = Decoration.widget({
             widget: new CellDisplay(id,status,docCode),
@@ -96,7 +98,7 @@ class CellInfo {
     }
 
     static updateCellInfo(cellInfo: CellInfo, from: number, to:number, docCode: string) {
-        let status = "dirty"
+        let status = "code dirty"
         let decoration = Decoration.widget({
             widget: new CellDisplay(cellInfo.id,status,cellInfo.modelCode !== null ? cellInfo.modelCode! : ""),
             block: true,
@@ -115,11 +117,12 @@ class CellInfo {
     //================================================================
     // THis is a stand in. We will need to send the proper update or add command and track the state.
     //================================================================
-    static tempSendCommandFunction(cellInfo: CellInfo): CellInfo {
-        let status = "clean"
+    static updateCellInfoForCommand(cellInfo: CellInfo): CellInfo {
+        //for add or update command
+        //update status to code pending
+        //set model code from doc code
+        let status = "code pending"
         let modelCode = cellInfo.docCode
-        //no command for now, just print message and change cell info
-        console.log("Create/Uupdate " + cellInfo.id)
         let decoration = Decoration.widget({
             widget: new CellDisplay(cellInfo.id,status,modelCode),
             block: true,
@@ -134,7 +137,7 @@ class CellInfo {
     //for now we make a dummy id nere
     private static nextId = 1
     private static getId() {
-        return CellInfo.nextId++
+        return "l" + String(CellInfo.nextId++)
     }
 }
 
@@ -158,7 +161,7 @@ type CellUpdateInfo = {
 function processUpdate(editorState: EditorState, cellInfoArray: CellInfo[] | null = null, changes: ChangeSet | null = null) {
     let {cellUpdateMap, cellsToDelete} = getUpdateInfo(cellInfoArray,changes)
     let cellState = updateCellState(editorState, cellUpdateMap)
-    cellState = sendCommands(editorState,cellState,cellsToDelete)
+    cellState = issueCommands(editorState,cellState,cellsToDelete)
     return cellState
 }
 
@@ -213,7 +216,7 @@ function getUpdateInfo(cellInfoArray: CellInfo[] | null, changes: ChangeSet | nu
 function createCellState(cellInfos: CellInfo[]): CellState {
     let dirtyCells: number[] = []
     cellInfos.forEach( (cellInfo,index) => {
-        if(cellInfo.status == "dirty") {
+        if(cellInfo.status == "code dirty") {
             dirtyCells.push(index)
         }
     })
@@ -285,15 +288,18 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
 }
 
 //change to sendUpdateCommands?
-function sendCommands(editorState: EditorState, cellState: CellState, cellsToDelete: CellInfo[] | null = null) {
-    let selectionHead = editorState.selection.asSingle().main.head
+function issueCommands(editorState: EditorState, cellState: CellState, cellsToDelete: CellInfo[] | null = null) {
+    let commands:any[] = []
 
     //send all the delete commands if there are any
     if(cellsToDelete !== null) {
         cellsToDelete!.forEach(cellInfo => {
-            console.log("Delete " + cellInfo.id)
+            let command = createDeleteAction(cellInfo)
+            commands.push(command)  
         })    
     } 
+
+    let selectionHead = editorState.selection.asSingle().main.head
     
     let cellsToUpdate: number[] = []
     if(cellState.dirtyCells.length > 0) {
@@ -305,13 +311,17 @@ function sendCommands(editorState: EditorState, cellState: CellState, cellsToDel
         })
 
         if(cellsToUpdate.length > 0) {
-            let newCellInfos = cellState.cellInfos.map( (cellInfo,index) => {
+            let newCellInfos: CellInfo[] = []
+            cellState.cellInfos.forEach( (cellInfo,index) => {
                 if(cellsToUpdate.indexOf(index) >= 0) {
-                    //send command, return updated cell info
-                    return CellInfo.tempSendCommandFunction(cellInfo)
+                    //create command, return updated cell info
+                    let {newCellInfo,command} = createAddUpdateAction(cellInfo,cellState.cellInfos)
+                    newCellInfos.push(newCellInfo)
+                    commands.push(command)
                 }
                 else {
-                    return cellInfo
+                    //nbo change to the cell info
+                    newCellInfos.push(cellInfo)
                 }
 
             })
@@ -321,6 +331,52 @@ function sendCommands(editorState: EditorState, cellState: CellState, cellsToDel
         }
     }
 
+    if(commands.length > 0) {
+        sendCommands(commands)
+    }
+
     return cellState
+}
+
+function createDeleteAction(cellInfo: CellInfo) {
+    console.log("Delete command: id = " + cellInfo.id)
+    let command: CodeCommand = {
+        type:"delete",
+        lineId: cellInfo.id
+    }
+    return command
+}
+
+function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
+    let command: CodeCommand = {
+        type: "",
+        lineId: cellInfo.id,
+        code: cellInfo.docCode
+        
+    }
+    if(cellInfo.modelCode === null) {
+        let lineNumber0Base = cellInfos.indexOf(cellInfo)
+        if(lineNumber0Base < 0) {
+            //HANDLE BETTER THAN THIS!!!
+            throw new Error("Line not found!")
+        }
+        console.log("Add command: id = " + cellInfo.id)
+        command.type = "add"
+        command.after = lineNumber0Base //the after value is one less than the 1-based line nubmer
+    }
+    else {
+        console.log("Update command: id = " + cellInfo.id)
+        command.type = "update"
+    }
+
+    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(cellInfo)
+
+    return {command,newCellInfo}
+}
+
+function sendCommands(commands: CodeCommand[]) {
+    console.log("Commands to send:")
+    console.log(JSON.stringify(commands))
+    multiCmd("ds1",commands)
 }
 
