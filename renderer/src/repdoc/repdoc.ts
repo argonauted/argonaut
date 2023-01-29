@@ -1,11 +1,17 @@
 import {CodeCommand,multiCmd} from "../session/sessionApi"
+import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
-import {WidgetType, EditorView, Decoration} from "@codemirror/view"
+import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Extension, Range, ChangeSet } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 
+//==============================
+// Sesssion Event Processing
+//==============================
+
 export const sessionEventEffect = StateEffect.define<{type: string, data: any}>()
 
+/** This function dispatches a document transaction for the given session event. */
 export function passEvent(view: any, eventName: string, data: any) {
     if(view !== null) {
         let effects: StateEffect<any>[] = [sessionEventEffect.of({type:eventName,data:data})]
@@ -14,25 +20,28 @@ export function passEvent(view: any, eventName: string, data: any) {
         //}
         view.dispatch({effects: effects})
     }
-  }
+}
 
-  const ReactiveCodeField = StateField.define<CellState>({
+//===============================
+// Repdoc Codemirror Extension
+//===============================
+
+const ReactiveCodeField = StateField.define<CellState>({
     create(editorState) {
-        return processUpdate(editorState)
+        return processDocChanges(editorState)
     },
+
     update(cellState, transaction) {
+        if(transaction.effects.length > 0) {
+            cellState = processSessionMessages(transaction.effects,cellState)
+        }
         if (transaction.docChanged) {
-            return processUpdate(transaction.state,cellState.cellInfos,transaction.changes)
+            cellState = processDocChanges(transaction.state,transaction.changes,cellState)
         }
-        else if(transaction.effects.length > 0) {
-            console.log("There are effects!")
-            return cellState
-        }
-        else {
-            //send commands to the model, if needed
-            return issueCommands(transaction.state,cellState)
-        }
+        cellState = issueSessionCommands(transaction.state,cellState)
+        return cellState
     },
+
     provide(cellState) {
         return EditorView.decorations.from(cellState, cellState => cellState.decorations)
     },
@@ -49,117 +58,12 @@ export const repdoc = (): Extension => {
 // Data Structures
 //===================================
 
-class CellDisplay extends WidgetType {
-    id: string
-    status: string
-    code: string
-
-    constructor(id:string, status: string, code: string) { 
-        super() 
-        this.id = id
-        this.status = status
-        this.code = code
-    }
-
-    eq(other: CellDisplay) { return (other.code == this.code)&&(other.id == this.id)&&(other.status == this.status) }
-
-    toDOM() {
-        let wrap = document.createElement("div")
-        wrap.style.backgroundColor = this.status == "code dirty" ? "beige" :
-                                     this.status == "code clean" ? "white" : "lightblue"
-        wrap.style.border = "1px solid black"
-        wrap.innerHTML = this.id + ": " + this.code
-        return wrap
-    }
-
-    ignoreEvent() { return true }
-}
-
-
-class CellInfo {
-    readonly id: string
-    readonly status: string
-    readonly from: number
-    readonly to: number
-    readonly docCode: string
-    readonly modelCode: string | null
-    readonly decoration: Decoration
-    readonly placedDecoration: Range<Decoration>
-
-    private constructor(id: string, status: string, from: number,to: number,
-            docCode: string, modelCode: string | null, 
-            decoration: Decoration, placedDecoration: Range<Decoration>) {
-        this.id = id
-        this.status = status,
-        this.from = from
-        this.to = to
-        this.docCode = docCode
-        this.modelCode = modelCode
-        this.decoration = decoration
-        this.placedDecoration = placedDecoration
-    }
-
-    static newCellInfo(from: number,to: number,docCode: string) {
-        let id = CellInfo.getId()
-        let status = "code dirty"
-        let modelCode = null
-        let decoration = Decoration.widget({
-            widget: new CellDisplay(id,status,docCode),
-            block: true,
-            side: 1
-        })
-        let placedDecoration = decoration.range(to)
-        return new CellInfo(id,status,from,to,docCode,modelCode,decoration,placedDecoration)
-    }
-
-    static updateCellInfo(cellInfo: CellInfo, from: number, to:number, docCode: string) {
-        let status = "code dirty"
-        let decoration = Decoration.widget({
-            widget: new CellDisplay(cellInfo.id,status,cellInfo.modelCode !== null ? cellInfo.modelCode! : ""),
-            block: true,
-            side: 1
-        })
-        let placedDecoration = decoration.range(to)
-        return new CellInfo(cellInfo.id,status,from,to,docCode,cellInfo.modelCode,decoration,placedDecoration)
-    }
-
-    /** This function creates a rempped cell info, if only the position changes */
-    static remapCellInfo(cellInfo: CellInfo, from: number,to: number) {
-        let placedDecoration = cellInfo.decoration.range(to)
-        return new CellInfo(cellInfo.id,cellInfo.status,from,to,cellInfo.docCode,cellInfo.modelCode,cellInfo.decoration,placedDecoration)
-    }
-
-    //================================================================
-    // THis is a stand in. We will need to send the proper update or add command and track the state.
-    //================================================================
-    static updateCellInfoForCommand(cellInfo: CellInfo): CellInfo {
-        //for add or update command
-        //update status to code pending
-        //set model code from doc code
-        let status = "code pending"
-        let modelCode = cellInfo.docCode
-        let decoration = Decoration.widget({
-            widget: new CellDisplay(cellInfo.id,status,modelCode),
-            block: true,
-            side: 1
-        })
-        let placedDecoration = decoration.range(cellInfo.to)
-        return new CellInfo(cellInfo.id,status,cellInfo.from,cellInfo.to,
-            cellInfo.docCode,modelCode,
-            decoration,  placedDecoration)
-    }
-
-    //for now we make a dummy id nere
-    private static nextId = 1
-    private static getId() {
-        return "l" + String(CellInfo.nextId++)
-    }
-}
 
 type CellState = {
     cellInfos: CellInfo[]
+    cellsToDelete: CellInfo[]
     decorations: RangeSet<Decoration>
-    dirtyCells: number[]
+    dirtyCells: boolean
 }
 
 type CellUpdateInfo = {
@@ -172,28 +76,87 @@ type CellUpdateInfo = {
 // Internal Functions
 //===================================
 
-/** This method processes a new or updated editor state */
-function processUpdate(editorState: EditorState, cellInfoArray: CellInfo[] | null = null, changes: ChangeSet | null = null) {
-    let {cellUpdateMap, cellsToDelete} = getUpdateInfo(cellInfoArray,changes)
-    let cellState = updateCellState(editorState, cellUpdateMap)
-    cellState = issueCommands(editorState,cellState,cellsToDelete)
+function createCellState(cellInfos: CellInfo[], cellsToDelete: CellInfo[]): CellState {
+    return {
+        cellInfos: cellInfos,
+        cellsToDelete: cellsToDelete,
+        decorations: (cellInfos.length > 0) ? 
+            RangeSet.of(cellInfos.map(cellInfo => cellInfo.placedDecoration)) : 
+            Decoration.none,
+        dirtyCells: cellInfos.some(cellInfo => cellInfo.status == "code dirty")
+    }
+}
+
+//--------------------------
+// Process Session Messages
+//--------------------------
+
+type CellStatusUpdate = {}
+
+/** This function process session messages, which are passed in as transaction effects. 
+ * It returns an updated cellState. */
+function processSessionMessages(effects: readonly StateEffect<any>[], cellState: CellState) {
+
+    let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
+
+    if(sessionEventEffects.length > 0) {
+        let cellChanges: (CellStatusUpdate | null)[] = Array(cellState.cellInfos.length)
+        sessionEventEffects.forEach(effect => {
+            switch(effect.value.type) {
+                case "initComplete":
+                    //nothing here?
+                    break
+
+                case "console":
+                    //get the active cell!
+                    break
+
+                case "plotReceived":
+                    //get the active cell
+                    break
+
+                case "docStatus":
+                    //active cell is completed
+                    //get next cells that are NOT completed
+                    break
+
+                case "evalStart":
+                    //mark up to here as completed? Or nothing.
+                    break
+
+                default:
+                    break
+            }
+        })
+    }
     return cellState
 }
 
-function getUpdateInfo(cellInfoArray: CellInfo[] | null, changes: ChangeSet | null) {
+//--------------------------
+// Process Document Changes
+//--------------------------
+
+/** This method processes document changes, returning an updated cell state. */
+function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  cellState: CellState | undefined = undefined) {
+    let {cellUpdateMap, cellsToDelete} = getUpdateInfo(changes,cellState)
+    let cellInfos = updateCellState(editorState, cellUpdateMap)
+    return createCellState(cellInfos,cellsToDelete)
+}
+
+function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
     let cellUpdateMap: Record<number,CellUpdateInfo> = {}
     let cellsToDelete: CellInfo[] = []
 
     //get the update info for each cell
-    if((cellInfoArray !== null)&&(changes !== null)) {
-        cellInfoArray.forEach( (cellInfo) => {
+    if((cellState !== null)&&(changes !== null)) {
+        cellState!.cellInfos.forEach( (cellInfo) => {
 
             let doDelete = false
             let doUpdate = false
             let doRemap = false
 
             //check effect of all text edits on this line
-            changes.iterChangedRanges((fromOld,toOld,fromNew,toNew) => {
+            changes!.iterChangedRanges((fromOld,toOld,fromNew,toNew) => {
                 if(fromOld < cellInfo.from) {
                     if(toOld < cellInfo.from) {
                         //before the start of this cell - we need to remap
@@ -219,30 +182,13 @@ function getUpdateInfo(cellInfoArray: CellInfo[] | null, changes: ChangeSet | nu
                 cellsToDelete.push(cellInfo)
             }
             else {
-                let newFrom = doRemap ? changes.mapPos(cellInfo.from) : cellInfo.from
+                let newFrom = doRemap ? changes!.mapPos(cellInfo.from) : cellInfo.from
                 cellUpdateMap[newFrom] = {cellInfo,doUpdate,doRemap}
             }
         })
     }
     
     return {cellUpdateMap, cellsToDelete}
-}
-
-function createCellState(cellInfos: CellInfo[]): CellState {
-    let dirtyCells: number[] = []
-    cellInfos.forEach( (cellInfo,index) => {
-        if(cellInfo.status == "code dirty") {
-            dirtyCells.push(index)
-        }
-    })
-
-    return {
-        cellInfos: cellInfos,
-        decorations: (cellInfos.length > 0) ? 
-            RangeSet.of(cellInfos.map(cellInfo => cellInfo.placedDecoration)) : 
-            Decoration.none,
-        dirtyCells: dirtyCells
-    }
 }
 
 //cycle through the new syntax tree, processing each code block:
@@ -279,7 +225,7 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
 
                     if(cellUpdateInfo!.doUpdate) {
                         //update to a cell
-                        newCellInfo = CellInfo.updateCellInfo(oldCellInfo,fromPos,toPos,codeText)
+                        newCellInfo = CellInfo.updateCellInfoCode(oldCellInfo,fromPos,toPos,codeText)
                     }
                     else if(cellUpdateInfo!.doRemap) {
                         //no change to a cell - just remap
@@ -299,50 +245,49 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
         }
     })
 
-    return createCellState(cellInfos)
+    return cellInfos
 }
 
-//change to sendUpdateCommands?
-function issueCommands(editorState: EditorState, cellState: CellState, cellsToDelete: CellInfo[] | null = null) {
-    let commands:any[] = []
+//--------------------------
+// Issue Session Commands
+//--------------------------
+
+/** This method issues any needed session commands from the current state. */
+function issueSessionCommands(editorState: EditorState, cellState: CellState) {
+    let commands:CodeCommand[] = []
 
     //send all the delete commands if there are any
-    if(cellsToDelete !== null) {
-        cellsToDelete!.forEach(cellInfo => {
+    if(cellState.cellsToDelete !== null) {
+        cellState.cellsToDelete!.forEach(cellInfo => {
             let command = createDeleteAction(cellInfo)
             commands.push(command)  
         })    
     } 
 
+    //send update commands based on selection head location (save when the user leaves the line)
     let selectionHead = editorState.selection.asSingle().main.head
     
-    let cellsToUpdate: number[] = []
-    if(cellState.dirtyCells.length > 0) {
-        cellState.dirtyCells.forEach(cellIndex => {
-            let cellInfo = cellState.cellInfos[cellIndex]
-            if( (cellInfo.from > selectionHead) || (cellInfo.to < selectionHead) ) {
-                cellsToUpdate.push(cellIndex)
-            }
-        })
+    if(cellState.dirtyCells) { 
+        let doUpdateArray = cellState.cellInfos.map(cellInfo => (cellInfo.from > selectionHead) || (cellInfo.to < selectionHead) )
 
-        if(cellsToUpdate.length > 0) {
+        if(doUpdateArray.includes(true)) {
             let newCellInfos: CellInfo[] = []
             cellState.cellInfos.forEach( (cellInfo,index) => {
-                if(cellsToUpdate.indexOf(index) >= 0) {
+                if(doUpdateArray[index]) {
                     //create command, return updated cell info
                     let {newCellInfo,command} = createAddUpdateAction(cellInfo,cellState.cellInfos)
                     newCellInfos.push(newCellInfo)
                     commands.push(command)
                 }
                 else {
-                    //nbo change to the cell info
+                    //no change to the cell info
                     newCellInfos.push(cellInfo)
                 }
 
             })
 
             //get the updated state
-            cellState = createCellState(newCellInfos)
+            cellState = createCellState(newCellInfos,[])
         }
     }
 
