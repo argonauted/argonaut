@@ -2,22 +2,20 @@ import {CodeCommand,multiCmd} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
-import type { EditorState, Extension, Range, ChangeSet } from '@codemirror/state'
+import type { EditorState, Extension, ChangeSet } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 
 //==============================
 // Sesssion Event Processing
 //==============================
 
-export const sessionEventEffect = StateEffect.define<{type: string, data: any}>()
+//SET THE TYPES TO SOMETHING BETTER THAN ANY
+export const sessionEventEffect = StateEffect.define<{data: any}>()
 
 /** This function dispatches a document transaction for the given session event. */
-export function passEvent(view: any, eventName: string, data: any) {
+export function stateEventToView(view: any, eventList: any) {
     if(view !== null) {
-        let effects: StateEffect<any>[] = [sessionEventEffect.of({type:eventName,data:data})]
-        //if(!view.state.field(ReactiveCodeField,false)) {
-        //    effects.push(StateEffect.appendConfig.of([ReactiveCodeField]))
-        //}
+        let effects: StateEffect<any>[] = [sessionEventEffect.of(eventList)]
         view.dispatch({effects: effects})
     }
 }
@@ -91,8 +89,6 @@ function createCellState(cellInfos: CellInfo[], cellsToDelete: CellInfo[]): Cell
 // Process Session Messages
 //--------------------------
 
-type CellStatusUpdate = {}
-
 /** This function process session messages, which are passed in as transaction effects. 
  * It returns an updated cellState. */
 function processSessionMessages(effects: readonly StateEffect<any>[], cellState: CellState) {
@@ -100,13 +96,12 @@ function processSessionMessages(effects: readonly StateEffect<any>[], cellState:
     let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
 
     if(sessionEventEffects.length > 0) {
-        let cellChanges: (CellStatusUpdate | null)[] = Array(cellState.cellInfos.length)
         sessionEventEffects.forEach(effect => {
-            switch(effect.value.type) {
-                case "initComplete":
-                    //nothing here?
-                    break
+            
+            console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CLIENT STATE EVENT")
+            console.log(JSON.stringify(effect.value,null,4))
 
+            switch(effect.value.type) {
                 case "console":
                     //get the active cell!
                     break
@@ -148,7 +143,7 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
     let cellsToDelete: CellInfo[] = []
 
     //get the update info for each cell
-    if((cellState !== null)&&(changes !== null)) {
+    if((cellState !== undefined)&&(changes !== undefined)) {
         cellState!.cellInfos.forEach( (cellInfo) => {
 
             let doDelete = false
@@ -183,6 +178,17 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
             }
             else {
                 let newFrom = doRemap ? changes!.mapPos(cellInfo.from) : cellInfo.from
+
+                //////////////////////////////////////////
+                //TEMPORARY FIX FOR NOT HANDLING EMPTY LINES IN DELETE 
+                let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
+                if(newTo - newFrom <= 0) {
+                    console.log("Found length 0 line!!!")
+                    cellsToDelete.push(cellInfo)
+                }
+                else 
+                //////////////////////////////////////////
+
                 cellUpdateMap[newFrom] = {cellInfo,doUpdate,doRemap}
             }
         })
@@ -257,18 +263,20 @@ function issueSessionCommands(editorState: EditorState, cellState: CellState) {
     let commands:CodeCommand[] = []
 
     //send all the delete commands if there are any
-    if(cellState.cellsToDelete !== null) {
-        cellState.cellsToDelete!.forEach(cellInfo => {
+    if(cellState.cellsToDelete.length != 0) {
+        cellState.cellsToDelete.forEach(cellInfo => {
             let command = createDeleteAction(cellInfo)
             commands.push(command)  
         })    
+        cellState.cellsToDelete = []
     } 
 
     //send update commands based on selection head location (save when the user leaves the line)
     let selectionHead = editorState.selection.asSingle().main.head
     
     if(cellState.dirtyCells) { 
-        let doUpdateArray = cellState.cellInfos.map(cellInfo => (cellInfo.from > selectionHead) || (cellInfo.to < selectionHead) )
+        let doUpdateArray = cellState.cellInfos.map(cellInfo => (cellInfo.status == "code dirty") &&
+                                                                ((cellInfo.from > selectionHead) || (cellInfo.to < selectionHead)) )
 
         if(doUpdateArray.includes(true)) {
             let newCellInfos: CellInfo[] = []

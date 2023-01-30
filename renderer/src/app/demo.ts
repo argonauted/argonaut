@@ -1,11 +1,11 @@
-import {startListener,addListener,initDoc} from "../session/sessionApi"
+import {startSessionListener,addEventListener,initDoc} from "../session/sessionApi"
 
 import {EditorView} from "@codemirror/view"
 
 import {basicSetup} from "codemirror"
 import {markdown} from "../lang_markdown_sp/index"
 
-import {repdoc,passEvent} from "../repdoc/repdoc"
+import {repdoc,stateEventToView} from "../repdoc/repdoc"
 
 //=========================
 // script
@@ -13,12 +13,9 @@ import {repdoc,passEvent} from "../repdoc/repdoc"
 let view: any = null
 
 //start the session
-addListener("initComplete",onInitComplete)
-addListener("console", onConsole)
-addListener("plotReceived",onPlotReceived)
-addListener("docStatus",onSessionMessage)
-addListener("evalStart",onSessionMessage)
-startListener()
+addEventListener("initComplete",onInitComplete)
+addEventListener("stateUpdate", onStateUpdate)
+startSessionListener()
 
 //=========================
 // functions
@@ -30,21 +27,8 @@ function onInitComplete(eventName: string, data: any) {
   setTimeout(startEditor,0)
 }
 
-function onConsole(eventName: string, data: any) {
-  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CONSOLE")
-  console.log(JSON.stringify(data,null,4))
-
-  passEvent(view,eventName,data)
-}
-
-function onPlotReceived(eventName: string, data: any) {
-  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ PLOT:")
-  console.log(JSON.stringify(data,null,4))
-}
-
-function onSessionMessage(eventName: string, data: any) {
-  console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ SESSION MESSAGE")
-  console.log(JSON.stringify(data,null,4))
+function onStateUpdate(eventName: string, data: any) {
+  stateEventToView(view,data)
 }
 
 function startEditor() {

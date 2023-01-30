@@ -1,33 +1,8 @@
 
 
-const MESSAGE_START1 = '[1] "|$($|'
-const MESSAGE_START2 = ' "|$($|'
-const MESSAGE_END = '|$)$|"'
-const MESSAGE_PREFIX1 = '[1] '
-const MESSAGE_PREFIX2 = ' '
-const MESSAGE_HEADER = '|$($|'
-const MESSAGE_FOOTER = '|$)$|'
-
-let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', params: ["111","",0]}
-
-
-let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
-
-let initComplete = false
-let eventIndex = 0
-
-let firstPass = true
-let continueEvents = true
-
-let activeSession: string | null = null
-let activeLineId: string | null = null
-let lineActive: boolean = false
-
-export type SessionMsg = {
-    type: string
-    session: string
-    data: any
-}
+//===========================
+// Type Definitions
+//===========================
 
 /** This is the format for a command argument in the function sendCmd and multiCmd */
 export type CodeCommand = {
@@ -37,11 +12,40 @@ export type CodeCommand = {
     after?: number
 }
 
-export type ConsoleEventData = {
+//session message from rsession
+export type SessionMsg = {
+    type: string
+    session: string
+    data: any
+}
+
+//event messages to client
+export type PlotPayload = {
+    type: "plot",
+    session: string,
+    lineId: string,
+    data: string
+}
+
+export type ConsolePayload = {
+    type: "console",
     session: string | null,
-    lineId: string | null,
-    type: string,
-    msgs: string[]
+    lineId: string | null, 
+    msgType: "stdout" | "stderr",
+    msg: string
+}
+
+export type DocStatusPayload = {
+    type: "docStatus",
+    session: string, 
+    lineId: string | null
+    nextIndex: number | null
+}
+
+export type EvalStartPayload = {
+    type: "evalStart",
+    session: string, 
+    lineId: string
 }
 
 /** This is the format used in the sendCommand function for a RSession request. */
@@ -55,10 +59,39 @@ type SessionRequestWrapper = {
 /** This is the format of a response from the RSession. */
 type SessionResponse = any
 
-//-----------------------------
-// main functions
-//-----------------------------
-export function startListener() {   
+//===========================
+// Fields
+//===========================
+
+const MESSAGE_START1 = '[1] "|$($|'
+const MESSAGE_START2 = ' "|$($|'
+const MESSAGE_END = '|$)$|"'
+const MESSAGE_PREFIX1 = '[1] '
+const MESSAGE_PREFIX2 = ' '
+const MESSAGE_HEADER = '|$($|'
+const MESSAGE_FOOTER = '|$)$|'
+
+let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', params: ["111","",0]}
+
+let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
+
+let initComplete = false
+let eventIndex = 0
+
+let firstPass = true
+let continueEvents = true
+
+let activeSession: string | null = null
+let activeLineId: string | null = null
+let lineActive: boolean = false
+
+//===========================
+// Main Functions
+//===========================
+
+//R SESSION LISTENER
+
+export function startSessionListener() {   
     if(firstPass) {
         //send a dummy command
         sendCommand(DUMMY_CMD)
@@ -68,9 +101,32 @@ export function startListener() {
     listenForEvents()
 }
 
-export function stopListener() {
+export function stopSessionListener() {
     continueEvents = false;
 }
+
+//CLIENT LISTENER
+
+export function addEventListener(eventName: string, callback: (eventName: string, data: any) => void ) {
+    let listenerList = listeners[eventName]
+    if(listenerList === undefined) {
+        listenerList = []
+        listeners[eventName] = listenerList
+    }
+    listenerList.push(callback)
+}
+
+
+export function randomIdString() {
+    //Make the biggest positive int random number possible (it doesn't have to be positive really)
+    //and express it as a string in the largest base possible
+    //Prefix with a letter ("f" for field) so we can use this as a field name symbol in R (as in data$f4j543k45) 
+    return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
+}
+
+//---------------------------
+// Commands
+//---------------------------
 
 export function initDoc(docSessionId: string) {
     sendRCommand(`initializeDocState("${docSessionId}")`)
@@ -99,6 +155,18 @@ export function rawCmd(docSessionId: string, cmd: CodeCommand) {
     sendRCommand(`executeCommand("${docSessionId}",${cmdToCmdListString(cmd)})`)
 }
 
+export function evaluateCmd(docSessionId: string) {
+    sendRCommand(`evaluate("${docSessionId}")`)
+}
+
+//=================================
+// internal functions
+//=================================
+
+//---------------------------
+// Command Helpers
+//---------------------------
+
 function cmdToCmdListString(cmd: CodeCommand) {
     let cmdListString = `list(type="${cmd.type}",lineId="${cmd.lineId}"`
     if(cmd.code !== undefined) {
@@ -111,30 +179,15 @@ function cmdToCmdListString(cmd: CodeCommand) {
     return cmdListString
 }
 
-export function evaluateCmd(docSessionId: string) {
-    sendRCommand(`evaluate("${docSessionId}")`)
-}
-
-export function addListener(eventName: string, callback: (eventName: string, data: any) => void ) {
-    let listenerList = listeners[eventName]
-    if(listenerList === undefined) {
-        listenerList = []
-        listeners[eventName] = listenerList
+function sendRCommand(rCode: string) {
+    if(!initComplete) {
+        throw new Error("R command can not be sent becaues init is not yet completed")
     }
-    listenerList.push(callback)
+    sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]})
 }
 
-
-export function randomIdString() {
-    //Make the biggest positive int random number possible (it doesn't have to be positive really)
-    //and express it as a string in the largest base possible
-    //Prefix with a letter ("f" for field) so we can use this as a field name symbol in R (as in data$f4j543k45) 
-    return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
-}
-
-//=================================
-// internal functions
-//=================================
+//--------------------------
+//-------------------------
 
 function dispatch(eventName: string, data: any) {
     let listenerList = listeners[eventName]
@@ -143,38 +196,33 @@ function dispatch(eventName: string, data: any) {
     }
 }
 
-function sendRCommand(rCode: string) {
-    if(!initComplete) {
-        throw new Error("R command can not be sent becaues init is not yet completed")
-    }
-    sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]})
-}
+
 
 //----------------------------
-// Event loop functions
+// Event listener functions
 //----------------------------
 
 function listenForEvents() {
     try {
-        getEvents();
+        getEvents()
     }
     catch(err: any) {
         console.log("Error in event listener loop!")
         console.log(err.toString())
         //issue another event request
-        onEventCompleted()
+        continueListener()
     }
 }
 
 const EVENT_DELAY = 10 //this is thrown in just because
-function onEventCompleted() {
+function continueListener() {
     if(continueEvents) {
         setTimeout(listenForEvents,EVENT_DELAY)
     }
 }
 
 //-------------------------
-// internal event handlers
+// Events handler functions
 //-------------------------
 
 function onInitComplete() {
@@ -190,20 +238,21 @@ function onInitComplete() {
 }
 
 function onPlotReceived(fileRef: string) {
-    window.rSessionApi.getBinary(fileRef).then( (response: any) => {
-        //console.log("Graphics file received:")
-        //console.log(JSON.stringify(response.data))   
-        dispatch("plotReceived",{data: response.data})
+    //get plot data as base64
+    window.rSessionApi.getBinary(fileRef).then( (response: any) => {  
+        dispatch("stateUpdate",[{type: "plot", session: activeSession, lineId: activeLineId, data: response.data}])
     })
     .catch(err => {
-    console.error("Error getting graphics file:")
-    console.error(err.toString())
+        console.error("Error getting graphics file:")
+        console.error(err.toString())
+        getConsoleEvent("stderr", "Error getting plot data: " + err.toString(), true)
     })
 }
 
 function onConsoleOut(text: string) {
+    let stateEventList: any[] = []
+
     let lines = text.split("\n")
-    let consoleLines: string[] = []
     lines.forEach(line => {
         //I don't know why, but the session messages seem to end up inn two different formats
         //when they come out the console
@@ -216,17 +265,15 @@ function onConsoleOut(text: string) {
                 msgChars = JSON.parse(line.slice(MESSAGE_PREFIX2.length))
             }
             else {
+                //Whst do I do here?
                 console.log("SOMETHING HAPPENED!")
             }
 
             if(msgChars !== null) {
                 try {
-                    //parse the total message string
                     let msgJson = JSON.parse(msgChars.slice(MESSAGE_HEADER.length,-MESSAGE_FOOTER.length))
-                    //send message, but send any queued console lines first
-                    flushConsole(consoleLines)
-                    consoleLines = []
-                    onSessionMsg(msgJson)
+                    let eventPayload = processSessionMsgEvent(msgJson)
+                    stateEventList.push(eventPayload)
                 }
                 catch(error: any) {
                     console.error("Error parsing msg body from session: " + error.toString())
@@ -235,29 +282,33 @@ function onConsoleOut(text: string) {
             }
         }
         else {
-            consoleLines.push(line)
+            stateEventList.push(getConsoleEvent("stdout",line))
         }
     })
 
-    flushConsole(consoleLines)
+    dispatch("stateUpdate",stateEventList)
 }
 
-function flushConsole(consoleLines: string[]) {
-    if(consoleLines.length > 0) {
-        let data: ConsoleEventData = {
-            session: activeSession,
-            lineId: lineActive ? activeLineId : null, //console output only comes when a line is active 
-            type: "console",
-            msgs: consoleLines
-        }
-        dispatch("console",data)
+function onConsoleErr(msg: string) {
+    dispatch("stateUpdate", [getConsoleEvent("stderr",msg)])
+}
+
+function getConsoleEvent(msgType: string, msg: string, forceLineId: boolean = false) {
+    //console output only comes when a line is active 
+    //allow to force the line id, usually for other error messages
+    return {
+        type: "console",
+        session: activeSession,
+        lineId: (lineActive || forceLineId) ? activeLineId : null,
+        msgType: msgType,
+        msg: msg
     }
 }
 
-function onSessionMsg(msgJson: SessionMsg) {
+function processSessionMsgEvent(msgJson: SessionMsg) {
     try {
         switch(msgJson.type) {
-            case "docStatus": {
+            case "docStatus": 
                 //Doc status triggers the end of the current active line, if there is one
                 //Note that plot data can/will come in afterwards
                 //So keep the activeSession and associated activeLineId
@@ -268,17 +319,30 @@ function onSessionMsg(msgJson: SessionMsg) {
                     //more lines to evaluate
                     evaluateCmd(msgJson.session)
                 }
-                dispatch("docStatus",msgJson)
-                break
-            }
+
+                if(msgJson.session !== activeSession) {
+                    //IS THERE SOMETHING I SHOULD DO HERE?
+                    console.log("Session msg Event not equal to active session")
+                }
+
+                return {
+                    type: "evalFinish",
+                    session: msgJson.session, 
+                    lineCompleted: (msgJson.session == activeSession) ? activeLineId : null,  //the sessions should be equal
+                    nextIndex: msgJson.data.nextIndex //maybe
+                } 
 
             case "evalStart": {
                 //Eval start triggers a new active line
                 activeSession = msgJson.session
                 activeLineId = msgJson.data
                 lineActive = true
-                dispatch("evalStart",msgJson)
-                break
+
+                return {
+                    type: "evalStart",
+                    session: msgJson.session, 
+                    lineId: activeLineId
+                } 
             }
 
             default:
@@ -293,18 +357,8 @@ function onSessionMsg(msgJson: SessionMsg) {
     }
 }
 
-function onConsoleErr(msg: string) {
-    let data: ConsoleEventData = {
-        session: activeSession,
-        lineId: lineActive ? activeLineId : null, //console output only comes when a line is active 
-        type: "stderr",
-        msgs: [msg]       
-    }
-    dispatch("console",data)
-}
-
 //-------------------------
-// RPC and Other Requests
+// RPC Functions
 //-------------------------
 
 /** This function sends a generic RPC command. If the command includes a field "processResponse",
@@ -363,12 +417,13 @@ function getEvents() {
             //console.log("Empty result in events")
         }
 
-        onEventCompleted()
+        continueListener()
+
     }).catch(e => {
         if(e) console.log(e.toString())
         else console.log("Unknown error in request")
 
-        onEventCompleted()
+        continueListener()
     })
 }
 

@@ -386,6 +386,7 @@ const DefaultBlockParsers: {[name: string]: ((cx: BlockContext, line: Line) => B
     //    (3) starts with a close parenthesis
 
     let type = isCodeExpr(line, cx)
+    console.log("line: " + line.text + "; type: " + type)
     if (type == -1) return false
 
     let continueIndent = 1   //allow any indent to count as a continuation
