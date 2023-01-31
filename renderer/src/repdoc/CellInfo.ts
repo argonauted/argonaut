@@ -156,13 +156,21 @@ export default class CellInfo {
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
     static updateCellInfoDisplay(cellInfo: CellInfo, {evalStarted, evalCompleted, addedConsoleLines, addedPlots, addedValues}: DisplayStateParams) {
+        
+
+        
+        if(evalStarted === true) {
+            //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
+            cellInfo = new CellInfo(cellInfo,{status: "value pending", consoleLines: [], plots: [], values: []})
+        }
+
         let params: CellInfoParams = {}
-        if(evalCompleted === true) params.status = "code clean"
-        else if(evalStarted === true) params.status = "value pending"
 
         if(addedConsoleLines !== undefined) params.consoleLines = cellInfo.consoleLines.concat(addedConsoleLines)
         if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
         if(addedValues !== undefined) params.values = cellInfo.values.concat(addedValues)
+
+        if(evalCompleted === true) params.status = "code clean"
 
         return new CellInfo(cellInfo,params)
     }

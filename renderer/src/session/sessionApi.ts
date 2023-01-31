@@ -72,6 +72,13 @@ const MESSAGE_HEADER = '|$($|'
 const MESSAGE_FOOTER = '|$)$|'
 
 let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', params: ["111","",0]}
+let DISPLAY_INIT_CMD: SessionRequestWrapper = {scope: "rpc" , method: "set_workbench_metrics", params: [{
+    "consoleWidth":120, 
+    "buildConsoleWidth":120, 
+    "graphicsWidth":600, 
+    "graphicsHeight":300, 
+    "devicePixelRatio":1
+}]}
 
 let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
 
@@ -133,11 +140,11 @@ export function initDoc(docSessionId: string) {
 }
 
 export function addCmd(docSessionId: string, lineId: string, code: string, after: number) {
-    sendRCommand(`addCmd("${docSessionId}","${lineId}","${code}",${after})`)
+    sendRCommand(`addCmd("${docSessionId}","${lineId}",${JSON.stringify(code)},${after})`)
 }
 
 export function updateCmd(docSessionId: string, lineId: string, code: string) {
-    sendRCommand(`updateCmd("${docSessionId}","${lineId}","${code}")`)
+    sendRCommand(`updateCmd("${docSessionId}","${lineId}",${JSON.stringify(code)})`)
 }
 
 export function deleteCmd(docSessionId: string, lineId: string) {
@@ -170,7 +177,7 @@ export function evaluateCmd(docSessionId: string) {
 function cmdToCmdListString(cmd: CodeCommand) {
     let cmdListString = `list(type="${cmd.type}",lineId="${cmd.lineId}"`
     if(cmd.code !== undefined) {
-        cmdListString += `,code="${cmd.code}"`
+        cmdListString += `,code=${JSON.stringify(cmd.code)}`
     }
     if(cmd.after !== undefined) {
         cmdListString += `,after=${cmd.after}`
@@ -231,6 +238,7 @@ function onInitComplete() {
 
     //r session is initialized
     //repdoc session is not really intialized until after these
+    sendCommand(DISPLAY_INIT_CMD)
     sendRCommand('require(repdoc)')
     sendRCommand(`initializeSession()`)
 
@@ -238,9 +246,11 @@ function onInitComplete() {
 }
 
 function onPlotReceived(fileRef: string) {
+    let session = activeSession
+    let lineId = activeLineId
     //get plot data as base64
     window.rSessionApi.getBinary(fileRef).then( (response: any) => {  
-        dispatch("stateUpdate",[{type: "plot", session: activeSession, lineId: activeLineId, data: response.data}])
+        dispatch("stateUpdate",[{type: "plot", session: session, lineId: lineId, data: response.data}])
     })
     .catch(err => {
         console.error("Error getting graphics file:")

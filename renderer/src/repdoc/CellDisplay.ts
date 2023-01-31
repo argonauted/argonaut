@@ -1,5 +1,5 @@
 import CellInfo from "./CellInfo"
-import {highlightTrailingWhitespace, WidgetType} from "@codemirror/view"
+import {WidgetType} from "@codemirror/view"
 
 export default class CellDisplay extends WidgetType {
     cellInfo: CellInfo
@@ -7,11 +7,15 @@ export default class CellDisplay extends WidgetType {
     activeConsoleCount: number = 0
     activePlotCount: number = 0
     activeValueCount: number = 0
+    isVisible = true
 
     element: HTMLElement | null = null
     consoleElement: HTMLElement | null = null
     plotsElement: HTMLElement | null = null
-    
+
+    //============================
+    // Public Methods
+    //============================
 
     constructor(cellInfo: CellInfo) { 
         super() 
@@ -26,13 +30,6 @@ export default class CellDisplay extends WidgetType {
         this.clearActiveValues()
     }
 
-    clearActiveValues() {
-        this.activeStatus = ""
-        this.activeConsoleCount = 0
-        this.activePlotCount = 0
-        this.activeValueCount = 0
-    }
-
     setCellInfo(cellInfo: CellInfo) {
         this.cellInfo = cellInfo
     }
@@ -40,6 +37,10 @@ export default class CellDisplay extends WidgetType {
     eq(other: CellDisplay) { 
         return (other.cellInfo.id == this.cellInfo.id) &&
                 (other.cellInfo.version == this.cellInfo.version)
+    }
+
+    ignoreEvent() { 
+        return true 
     }
     
     updateStatus() {
@@ -51,9 +52,18 @@ export default class CellDisplay extends WidgetType {
         }
     }
 
-    updateConsole() {
-        if((this.element !== null)&&(this.activeConsoleCount < this.cellInfo.consoleLines.length)) {
-            for(let index = this.activeConsoleCount; index < this.cellInfo.consoleLines.length; index++) {
+    updateConsole(supressVisibleCheck = false) {
+        if(this.element !== null) {
+            let index = 0
+            if(this.activeConsoleCount < this.cellInfo.consoleLines.length) {
+                index = this.activeConsoleCount
+            }
+            else if(this.activeConsoleCount != this.cellInfo.consoleLines.length) {
+                index = 0
+                this.removeAllElements(this.consoleElement)
+            }
+
+            for(; index < this.cellInfo.consoleLines.length; index++) {
                 let spanElement = document.createElement("span")
                 let msgType = this.cellInfo.consoleLines[index][0]
                 spanElement.innerHTML = this.cellInfo.consoleLines[index][1]
@@ -67,24 +77,37 @@ export default class CellDisplay extends WidgetType {
             }
             this.activeConsoleCount = this.cellInfo.consoleLines.length
         }
+
+        if(!supressVisibleCheck) this.doVisibleCheck()
     }
 
-    updatePlots() {
-        if((this.element !== null)&&(this.activePlotCount < this.cellInfo.plots.length)) {
-            for(let index = this.activePlotCount; index < this.cellInfo.plots.length; index++) {
+    updatePlots(supressVisibleCheck = false) {
+        if(this.element !== null) {
+            let index = 0
+            if(this.activePlotCount < this.cellInfo.plots.length) {
+                index = this.activePlotCount
+            }
+            else if(this.activePlotCount != this.cellInfo.plots.length) {
+                index = 0
+                this.removeAllElements(this.plotsElement)
+            }
+
+            for(; index < this.cellInfo.plots.length; index++) {
                 let plotElement = document.createElement("img")
                 plotElement.src = "data:image/png;base64," + this.cellInfo.plots[index]
                 if(index > 0) {
-                    this.consoleElement!.appendChild(document.createElement("br"))
+                    this.plotsElement!.appendChild(document.createElement("br"))
                 }
-                this.consoleElement!.appendChild(plotElement)
+                this.plotsElement!.appendChild(plotElement)
             }
-            this.activeConsoleCount = this.cellInfo.plots.length
+            this.activePlotCount = this.cellInfo.plots.length
         }
+
+        if(!supressVisibleCheck) this.doVisibleCheck()
     }
 
     updateValues() {
-
+        //not implemented
     }
 
     toDOM() {
@@ -92,18 +115,45 @@ export default class CellDisplay extends WidgetType {
             this.element = document.createElement("div")
             //this.element.appendChild(document.createTextNode(this.cellInfo.id))
             this.element.style.border = "1px solid #808080"
-            this.element.style.padding = "3px"
+            this.element.style.padding = "5px"
 
             this.consoleElement = document.createElement("div")
             this.element.appendChild(this.consoleElement)
-            this.updateConsole()
+            this.updateConsole(true)
 
             this.plotsElement = document.createElement("div")
             this.element.appendChild(this.plotsElement)
-            this.updatePlots()
+            this.updatePlots(true)
+
+            this.doVisibleCheck()
         }
         return this.element
     }
 
-    ignoreEvent() { return true }
+    //==============================
+    // Internal Methods
+    //==============================
+
+    clearActiveValues() {
+        this.activeStatus = ""
+        this.activeConsoleCount = 0
+        this.activePlotCount = 0
+        this.activeValueCount = 0
+    }
+
+    removeAllElements(element:HTMLElement | null) {
+        if(element !== null) {
+            while(element.childElementCount > 0) {
+                element.removeChild(element.lastChild!)
+            }
+        }
+    }
+
+    doVisibleCheck() {
+        let isVisible = (this.activeConsoleCount > 0)||(this.activePlotCount > 0)||(this.activeValueCount > 0)
+        if((this.element != null)&&(this.isVisible != isVisible)) {
+            this.isVisible = isVisible
+            this.element.style.display = isVisible ? "" : "none"
+        }
+    }
 }

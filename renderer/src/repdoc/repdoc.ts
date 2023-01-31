@@ -110,19 +110,24 @@ function processSessionMessages(effects: readonly StateEffect<any>[], cellState:
 
                 switch(element.type) {
                     case "console": {
-                        if(element.lineId !== undefined) {
-                            let index = getCellInfoIndex(element.lineId,newCellInfos)
-                            if(index >= 0) {
-                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedConsoleLines: [[element.msgType,element.msg]]})
+                        if((element.msg != "[1]")&&(element.msg != "")&&(element.msg != " ")) {
+                            //I'm geting some funny empty lines
+                            //for now, skip the "empty" lines. We might want to investigate more to see where they come from
+
+                            if(element.lineId !== undefined) {
+                                let index = getCellInfoIndex(element.lineId,newCellInfos)
+                                if(index >= 0) {
+                                    newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedConsoleLines: [[element.msgType,element.msg]]})
+                                }
+                                else {
+                                    console.error("Console data received but line number not found.")
+                                }
                             }
                             else {
-                                console.error("Console data received but line number not found.")
+                                //if no line, print to console for now
+                                if(element.msgType == "stderr") console.error(element.msg)
+                                else console.log(element.msg)
                             }
-                        }
-                        else {
-                            //if no line, print to console for now
-                            if(element.msgType == "stderr") console.error(element.msg)
-                            else console.log(element.msg)
                         }
                         break
                     }
