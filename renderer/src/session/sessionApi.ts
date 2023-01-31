@@ -35,10 +35,10 @@ export type ConsolePayload = {
     msg: string
 }
 
-export type DocStatusPayload = {
-    type: "docStatus",
+export type EvalFinishPayload = {
+    type: "evalFinish",
     session: string, 
-    lineId: string | null
+    lineCompleted: string | null
     nextIndex: number | null
 }
 

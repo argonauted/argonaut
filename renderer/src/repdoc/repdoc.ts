@@ -96,35 +96,100 @@ function processSessionMessages(effects: readonly StateEffect<any>[], cellState:
     let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
 
     if(sessionEventEffects.length > 0) {
+        let newCellInfos = cellState.cellInfos.concat()
+
         sessionEventEffects.forEach(effect => {
             
             console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CLIENT STATE EVENT")
             console.log(JSON.stringify(effect.value,null,4))
 
-            switch(effect.value.type) {
-                case "console":
-                    //get the active cell!
-                    break
+            //CLEAN THIS UP!!!
+            effect.value.forEach( (element: any) => {
 
-                case "plotReceived":
-                    //get the active cell
-                    break
+                //for now we are assuming a single session
 
-                case "docStatus":
-                    //active cell is completed
-                    //get next cells that are NOT completed
-                    break
+                switch(element.type) {
+                    case "console": {
+                        if(element.lineId !== undefined) {
+                            let index = getCellInfoIndex(element.lineId,newCellInfos)
+                            if(index >= 0) {
+                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedConsoleLines: [[element.msgType,element.msg]]})
+                            }
+                            else {
+                                console.error("Console data received but line number not found.")
+                            }
+                        }
+                        else {
+                            //if no line, print to console for now
+                            if(element.msgType == "stderr") console.error(element.msg)
+                            else console.log(element.msg)
+                        }
+                        break
+                    }
 
-                case "evalStart":
-                    //mark up to here as completed? Or nothing.
-                    break
+                    case "plot":
+                        if(element.lineId !== undefined) {
+                            let index = getCellInfoIndex(element.lineId,newCellInfos)
+                            if(index >= 0) {
+                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedPlots: element.data})
+                            }
+                            else {
+                                console.error("Plot received but line number not found.")
+                            }
+                        }
+                        else {
+                            console.error("Plot received but line number not present.")
+                        }
+                        break
 
-                default:
-                    break
-            }
+                    case "evalFinish":
+
+                        //need to add treatement for later lines!!!
+
+                        if(element.lineCompleted !== undefined) {
+                            let index = getCellInfoIndex(element.lineCompleted,newCellInfos)
+                            if(index >= 0) {
+                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {evalCompleted: true})
+                            }
+                            else {
+                                console.error("Eval complete reported but line number not found.")
+                            }
+                        }
+                        else {
+                            console.error("Eval complete reported but line number not present.")
+                        }
+                        break
+
+
+                    case "evalStart":
+                        
+                        //need to add treatement for later lines!!!
+
+                        if(element.lineId !== undefined) {
+                            let index = getCellInfoIndex(element.lineId,newCellInfos)
+                            if(index >= 0) {
+                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {evalStarted: true})
+                            }
+                            else {
+                                console.error("Eval started reported but line number not found.")
+                            }
+                        }
+                        else {
+                            console.error("Eval started reported but line number not present.")
+                        }
+                        break
+
+                    default:
+                        break
+                }
+            })
         })
     }
     return cellState
+}
+
+function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
+    return cellInfos.findIndex(cellInfo => cellInfo.id == lineId)
 }
 
 //--------------------------
