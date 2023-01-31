@@ -5,7 +5,7 @@ import {EditorView} from "@codemirror/view"
 import {basicSetup} from "codemirror"
 import {markdown} from "../lang_markdown_sp/index"
 
-import {repdoc,stateEventToView} from "../repdoc/repdoc"
+import {repdoc,sessionOutputToView} from "../repdoc/repdoc"
 
 //=========================
 // script
@@ -14,7 +14,7 @@ let view: any = null
 
 //start the session
 addEventListener("initComplete",onInitComplete)
-addEventListener("stateUpdate", onStateUpdate)
+addEventListener("sessionOutput", onSessionOutput)
 startSessionListener()
 
 //=========================
@@ -27,8 +27,8 @@ function onInitComplete(eventName: string, data: any) {
   setTimeout(startEditor,0)
 }
 
-function onStateUpdate(eventName: string, data: any) {
-  stateEventToView(view,data)
+function onSessionOutput(eventName: string, data: any) {
+  sessionOutputToView(view,data)
 }
 
 function startEditor() {

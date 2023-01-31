@@ -1,4 +1,4 @@
-import {CodeCommand,multiCmd} from "../session/sessionApi"
+import {CodeCommand,evaluateSessionCmds,SessionOutputEvent} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
@@ -10,12 +10,12 @@ import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 //==============================
 
 //SET THE TYPES TO SOMETHING BETTER THAN ANY
-export const sessionEventEffect = StateEffect.define<{data: any}>()
+export const sessionOutputEffect = StateEffect.define<[SessionOutputEvent]>()
 
 /** This function dispatches a document transaction for the given session event. */
-export function stateEventToView(view: any, eventList: any) {
+export function sessionOutputToView(view: any, eventList: any) {
     if(view !== null) {
-        let effects: StateEffect<any>[] = [sessionEventEffect.of(eventList)]
+        let effects: StateEffect<any>[] = [sessionOutputEffect.of(eventList)]
         view.dispatch({effects: effects})
     }
 }
@@ -93,108 +93,55 @@ function createCellState(cellInfos: CellInfo[], cellsToDelete: CellInfo[]): Cell
  * It returns an updated cellState. */
 function processSessionMessages(effects: readonly StateEffect<any>[], cellState: CellState) {
 
-    let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
+    //let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
 
-    if(sessionEventEffects.length > 0) {
-        let newCellInfos = cellState.cellInfos.concat()
+    for(let i1 = 0; i1 < effects.length; i1++) {
+        let effect = effects[i1]
+        if(effect.is(sessionOutputEffect)) { 
+            let newCellInfos = cellState.cellInfos.concat()
 
-        sessionEventEffects.forEach(effect => {
-            
-            console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ CLIENT STATE EVENT")
-            console.log(JSON.stringify(effect.value,null,4))
-
-            //CLEAN THIS UP!!!
-            effect.value.forEach( (element: any) => {
-
-                //for now we are assuming a single session
-
-                switch(element.type) {
-                    case "console": {
-                        if((element.msg != "[1]")&&(element.msg != "")&&(element.msg != " ")) {
-                            //I'm geting some funny empty lines
-                            //for now, skip the "empty" lines. We might want to investigate more to see where they come from
-
-                            if(element.lineId !== undefined) {
-                                let index = getCellInfoIndex(element.lineId,newCellInfos)
-                                if(index >= 0) {
-                                    newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedConsoleLines: [[element.msgType,element.msg]]})
-                                }
-                                else {
-                                    console.error("Console data received but line number not found.")
-                                }
-                            }
-                            else {
-                                //if no line, print to console for now
-                                if(element.msgType == "stderr") console.error(element.msg)
-                                else console.log(element.msg)
-                            }
-                        }
-                        break
+            for(let i2 = 0; i2 < effect.value.length; i2++) {
+                //we are doing only one session for now
+                let sessionOutputData = effect.value[i2] as SessionOutputEvent
+                if(sessionOutputData.lineId !== null) {
+                    let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
+                    if(index >= 0) {
+                        newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], sessionOutputData.data)
                     }
-
-                    case "plot":
-                        if(element.lineId !== undefined) {
-                            let index = getCellInfoIndex(element.lineId,newCellInfos)
-                            if(index >= 0) {
-                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {addedPlots: element.data})
-                            }
-                            else {
-                                console.error("Plot received but line number not found.")
-                            }
-                        }
-                        else {
-                            console.error("Plot received but line number not present.")
-                        }
-                        break
-
-                    case "evalFinish":
-
-                        //need to add treatement for later lines!!!
-
-                        if(element.lineCompleted !== undefined) {
-                            let index = getCellInfoIndex(element.lineCompleted,newCellInfos)
-                            if(index >= 0) {
-                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {evalCompleted: true})
-                            }
-                            else {
-                                console.error("Eval complete reported but line number not found.")
-                            }
-                        }
-                        else {
-                            console.error("Eval complete reported but line number not present.")
-                        }
-                        break
-
-
-                    case "evalStart":
-                        
-                        //need to add treatement for later lines!!!
-
-                        if(element.lineId !== undefined) {
-                            let index = getCellInfoIndex(element.lineId,newCellInfos)
-                            if(index >= 0) {
-                                newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], {evalStarted: true})
-                            }
-                            else {
-                                console.error("Eval started reported but line number not found.")
-                            }
-                        }
-                        else {
-                            console.error("Eval started reported but line number not present.")
-                        }
-                        break
-
-                    default:
-                        break
+                    else {
+                        console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
+                    }
                 }
-            })
-        })
+                else {
+                    //figure out where we want to print this
+                    printNonLineOutput(sessionOutputData)
+                }
+            }
+
+            cellState = createCellState(newCellInfos,[])
+        }
     }
     return cellState
 }
 
 function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
     return cellInfos.findIndex(cellInfo => cellInfo.id == lineId)
+}
+
+//fix the type here
+function printNonLineOutput(sessionOutputData: any) {
+    if(sessionOutputData.data.addedConsoleLines !== null) {
+        let lines = sessionOutputData.data.addedConsoleLines
+        for(let i = 0; i < lines.length; i++) {
+            if(lines[i][0] == "stdout") {
+                console.log(lines[i][1])
+            }
+            else {
+                console.error(lines[i][1])
+            }
+        }
+        //we'll ignore other stuff in there. it shouldn be there
+    }
 }
 
 //--------------------------
@@ -253,7 +200,7 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
                 //TEMPORARY FIX FOR NOT HANDLING EMPTY LINES IN DELETE 
                 let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
                 if(newTo - newFrom <= 0) {
-                    console.log("Found length 0 line!!!")
+                    //console.log("Found length 0 line!!!")
                     cellsToDelete.push(cellInfo)
                 }
                 else 
@@ -377,7 +324,7 @@ function issueSessionCommands(editorState: EditorState, cellState: CellState) {
 }
 
 function createDeleteAction(cellInfo: CellInfo) {
-    console.log("Delete command: id = " + cellInfo.id)
+    //console.log("Delete command: id = " + cellInfo.id)
     let command: CodeCommand = {
         type:"delete",
         lineId: cellInfo.id
@@ -398,12 +345,12 @@ function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
             //HANDLE BETTER THAN THIS!!!
             throw new Error("Line not found!")
         }
-        console.log("Add command: id = " + cellInfo.id)
+        //console.log("Add command: id = " + cellInfo.id)
         command.type = "add"
         command.after = lineNumber0Base //the after value is one less than the 1-based line nubmer
     }
     else {
-        console.log("Update command: id = " + cellInfo.id)
+        //console.log("Update command: id = " + cellInfo.id)
         command.type = "update"
     }
 
@@ -413,8 +360,8 @@ function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
 }
 
 function sendCommands(commands: CodeCommand[]) {
-    console.log("Commands to send:")
-    console.log(JSON.stringify(commands))
-    multiCmd("ds1",commands)
+    //console.log("Commands to send:")
+    //console.log(JSON.stringify(commands))
+    evaluateSessionCmds("ds1",commands)
 }
 
