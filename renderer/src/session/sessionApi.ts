@@ -70,6 +70,8 @@ let activeSession: string | null = null
 let activeLineId: string | null = null
 let lineActive: boolean = false
 
+let sessionCmdPending = false
+let rCmdQueue: string[] = []
 //===========================
 // Main Functions
 //===========================
@@ -113,20 +115,54 @@ export function randomIdString() {
 // Commands
 //---------------------------
 
+//TODO - I need to work on session and cmd queue startup
+
 export function initDoc(docSessionId: string) {
-    sendRCommand(`initializeDocState("${docSessionId}")`)
+    let rCmd = `initializeDocState("${docSessionId}")`
+    //ADD COMMENTED OUT CODE WHEN I ADD RESPONSE TO INITIALIZE DOC STATE FUNCTION
+    //if(sessionCmdPending) {
+    //    rCmdQueue.push(rCmd)
+    //}
+    //else {
+    //    sessionCmdPending = true
+        sendRCommand(rCmd)
+    //}
 }
 
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[] ) {
     let childCmdStrings = cmds.map(cmdToCmdListString)
     let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
-    //let cmdString = `list(type="multi",cmds=${childCmdListString})`
-    sendRCommand(`multiCmd("${docSessionId}",${childCmdListString})`)
+
+    let rCmd = `multiCmd("${docSessionId}",${childCmdListString})`
+    if(sessionCmdPending) {
+        rCmdQueue.push(rCmd)
+    }
+    else {
+        sessionCmdPending = true
+        sendRCommand(rCmd)
+    }
 }
 
 function evaluateSessionUpdate(docSessionId: string) {
+    sessionCmdPending = true
     sendRCommand(`evaluate("${docSessionId}")`)
 }
+
+function sessionCommandCompleted(statusJson: any) {
+    setTimeout(() => {
+        if(rCmdQueue.length > 0) {
+            sendRCommand(rCmdQueue.splice(0,1)[0])
+        }
+        else if(statusJson.data.evalComplete === false) {
+            //more lines to evaluate
+            evaluateSessionUpdate(statusJson.session)
+        }
+        else {
+            sessionCmdPending = false
+        }
+    },0)
+}
+                            
 
 //=================================
 // internal functions
@@ -257,10 +293,8 @@ function onConsoleOut(text: string) {
                         break
                     }
                     case "docStatus": {
-                        if(msgJson.data.evalComplete === false) {
-                            //more lines to evaluate
-                            evaluateSessionUpdate(msgJson.session)
-                        }
+                        //manage command queue
+                        sessionCommandCompleted(msgJson)
         
                         if(msgJson.session !== activeSession) {
                             //IS THERE SOMETHING I SHOULD DO HERE?

@@ -199,7 +199,7 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
                 //////////////////////////////////////////
                 //TEMPORARY FIX FOR NOT HANDLING EMPTY LINES IN DELETE 
                 let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
-                if(newTo - newFrom <= 0) {
+                if((newTo - newFrom <= 0)&&(cellInfo.modelCode !== null)) {
                     //console.log("Found length 0 line!!!")
                     cellsToDelete.push(cellInfo)
                 }
