@@ -237,12 +237,23 @@ function onConsoleOut(text: string) {
                 switch(msgJson.type) {
                     case "evalStart": {
                         activeSession = msgJson.session
-                        activeLineId = msgJson.data
+                        activeLineId = msgJson.data.lineId
                         lineActive = true
         
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
                         currentEvent.data.evalStarted = true
+                        break
+                    }
+                    case "console": {
+                        if(currentEvent === null) {
+                            currentEvent = createSessionOutputEvent()
+                            sessionOutputEvents.push(currentEvent)
+                        }
+                        if(currentEvent.data.addedConsoleLines === undefined) {
+                            currentEvent.data.addedConsoleLines = []
+                        }
+                        currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
                         break
                     }
                     case "docStatus": {
@@ -337,9 +348,9 @@ function getMessageJson(line: string) {
 /** This function sends a generic RPC command. If the command includes a field "processResponse",
  * this is called to process the response. The response json is also printed. */
 function sendCommand(cmd: SessionRequestWrapper) {
-    //console.log("Send command: " + JSON.stringify(cmd))
+    console.log("Send command: " + JSON.stringify(cmd))
     window.rSessionApi.sendRpcRequest(cmd.scope,cmd.method,cmd.params).then( (response: SessionResponse) => {
-        //console.log("Command response: " + JSON.stringify(response))
+        console.log("Command response: " + JSON.stringify(response))
 
         if(cmd.processResponse) cmd.processResponse!(response)
     }).catch(e => {

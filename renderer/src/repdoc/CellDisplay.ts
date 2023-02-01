@@ -69,6 +69,14 @@ export default class CellDisplay extends WidgetType {
                 spanElement.innerHTML = this.cellInfo.consoleLines[index][1]
                 if(msgType == "stderr") {
                     spanElement.style.color = "red"
+                    spanElement.style.fontWeight = "bold"
+                }
+                if(msgType == "stdwrn") {
+                    spanElement.style.color = "orange"
+                    spanElement.style.fontWeight = "bold"
+                }
+                if(msgType == "stdmsg") {
+                    spanElement.style.color = "blue"
                 }
                 if(index > 0) {
                     this.consoleElement!.appendChild(document.createElement("br"))
