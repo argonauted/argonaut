@@ -5,6 +5,25 @@ import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Extension, ChangeSet } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 
+//===================================
+// Data Structures
+//===================================
+
+
+type DocState = {
+    docVersion: number,
+    cellInfos: CellInfo[]
+    cellsToDelete: CellInfo[]
+    decorations: RangeSet<Decoration>
+    dirtyCells: boolean
+}
+
+type CellUpdateInfo = {
+    cellInfo: CellInfo
+    doUpdate: boolean
+    doRemap: boolean
+}
+
 //==============================
 // Sesssion Event Processing
 //==============================
@@ -24,24 +43,24 @@ export function sessionOutputToView(view: any, eventList: any) {
 // Repdoc Codemirror Extension
 //===============================
 
-const ReactiveCodeField = StateField.define<CellState>({
+const ReactiveCodeField = StateField.define<DocState>({
     create(editorState) {
         return processDocChanges(editorState)
     },
 
-    update(cellState, transaction) {
+    update(docState, transaction) {
         if(transaction.effects.length > 0) {
-            cellState = processSessionMessages(transaction.effects,cellState)
+            docState = processSessionMessages(transaction.effects,docState)
         }
         if (transaction.docChanged) {
-            cellState = processDocChanges(transaction.state,transaction.changes,cellState)
+            docState = processDocChanges(transaction.state,transaction.changes,docState)
         }
-        cellState = issueSessionCommands(transaction.state,cellState)
-        return cellState
+        docState = issueSessionCommands(transaction.state,docState)
+        return docState
     },
 
-    provide(cellState) {
-        return EditorView.decorations.from(cellState, cellState => cellState.decorations)
+    provide(docState) {
+        return EditorView.decorations.from(docState, docState => docState.decorations)
     },
 })
 
@@ -53,29 +72,12 @@ export const repdoc = (): Extension => {
 }
 
 //===================================
-// Data Structures
-//===================================
-
-
-type CellState = {
-    cellInfos: CellInfo[]
-    cellsToDelete: CellInfo[]
-    decorations: RangeSet<Decoration>
-    dirtyCells: boolean
-}
-
-type CellUpdateInfo = {
-    cellInfo: CellInfo
-    doUpdate: boolean
-    doRemap: boolean
-}
-
-//===================================
 // Internal Functions
 //===================================
 
-function createCellState(cellInfos: CellInfo[], cellsToDelete: CellInfo[]): CellState {
+function createDocState(cellInfos: CellInfo[], cellsToDelete: CellInfo[],docVersion: number): DocState {
     return {
+        docVersion: docVersion,
         cellInfos: cellInfos,
         cellsToDelete: cellsToDelete,
         decorations: (cellInfos.length > 0) ? 
@@ -90,15 +92,15 @@ function createCellState(cellInfos: CellInfo[], cellsToDelete: CellInfo[]): Cell
 //--------------------------
 
 /** This function process session messages, which are passed in as transaction effects. 
- * It returns an updated cellState. */
-function processSessionMessages(effects: readonly StateEffect<any>[], cellState: CellState) {
+ * It returns an updated docState. */
+function processSessionMessages(effects: readonly StateEffect<any>[], docState: DocState) {
 
     //let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
 
     for(let i1 = 0; i1 < effects.length; i1++) {
         let effect = effects[i1]
         if(effect.is(sessionOutputEffect)) { 
-            let newCellInfos = cellState.cellInfos.concat()
+            let newCellInfos = docState.cellInfos.concat()
 
             for(let i2 = 0; i2 < effect.value.length; i2++) {
                 //we are doing only one session for now
@@ -118,10 +120,10 @@ function processSessionMessages(effects: readonly StateEffect<any>[], cellState:
                 }
             }
 
-            cellState = createCellState(newCellInfos,[])
+            docState = createDocState(newCellInfos,[],docState.docVersion)
         }
     }
-    return cellState
+    return docState
 }
 
 function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
@@ -130,7 +132,7 @@ function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
 
 //fix the type here
 function printNonLineOutput(sessionOutputData: any) {
-    if(sessionOutputData.data.addedConsoleLines !== null) {
+    if(sessionOutputData.data.addedConsoleLines !== undefined) {
         let lines = sessionOutputData.data.addedConsoleLines
         for(let i = 0; i < lines.length; i++) {
             if(lines[i][0] == "stdout") {
@@ -149,19 +151,20 @@ function printNonLineOutput(sessionOutputData: any) {
 //--------------------------
 
 /** This method processes document changes, returning an updated cell state. */
-function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  cellState: CellState | undefined = undefined) {
-    let {cellUpdateMap, cellsToDelete} = getUpdateInfo(changes,cellState)
-    let cellInfos = updateCellState(editorState, cellUpdateMap)
-    return createCellState(cellInfos,cellsToDelete)
+function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  docState: DocState | undefined = undefined) {
+    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 //increment version here for new document
+    let {cellUpdateMap, cellsToDelete} = getUpdateInfo(changes,docState)
+    let cellInfos = updateLines(editorState, cellUpdateMap,docVersion)
+    return createDocState(cellInfos,cellsToDelete,docVersion)
 }
 
-function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
+function getUpdateInfo(changes?: ChangeSet, docState?: DocState) {
     let cellUpdateMap: Record<number,CellUpdateInfo> = {}
     let cellsToDelete: CellInfo[] = []
 
     //get the update info for each cell
-    if((cellState !== undefined)&&(changes !== undefined)) {
-        cellState!.cellInfos.forEach( (cellInfo) => {
+    if((docState !== undefined)&&(changes !== undefined)) {
+        docState!.cellInfos.forEach( (cellInfo) => {
 
             let doDelete = false
             let doUpdate = false
@@ -199,9 +202,13 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
                 //////////////////////////////////////////
                 //TEMPORARY FIX FOR NOT HANDLING EMPTY LINES IN DELETE 
                 let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
-                if((newTo - newFrom <= 0)&&(cellInfo.modelCode !== null)) {
-                    //console.log("Found length 0 line!!!")
-                    cellsToDelete.push(cellInfo)
+                if(newTo - newFrom <= 0) {
+                    //a zero length line is currently omitted from the parsed lines
+                    //so it will disappear(!) FIX THAT
+                    //If this line has already been sent to the session, send a delete for it.
+                    if(cellInfo.modelCode !== null) {
+                        cellsToDelete.push(cellInfo)
+                    }
                 }
                 else 
                 //////////////////////////////////////////
@@ -222,7 +229,7 @@ function getUpdateInfo(changes?: ChangeSet, cellState?: CellState) {
 //   - fpr cells not found in the transition info
 //     - create new decdoration and cell info (with a hook to send create command)
 // - leave a hook to send delete commands for cells that should be deleted
-function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,CellUpdateInfo> | null) { 
+function updateLines(editorState: EditorState, cellUpdateMap: Record<number,CellUpdateInfo> | null, docVersion: number) { 
     const cellInfos: CellInfo[] = []
 
     //get the updated code blocks
@@ -248,7 +255,7 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
 
                     if(cellUpdateInfo!.doUpdate) {
                         //update to a cell
-                        newCellInfo = CellInfo.updateCellInfoCode(oldCellInfo,fromPos,toPos,codeText)
+                        newCellInfo = CellInfo.updateCellInfoCode(oldCellInfo,fromPos,toPos,codeText,docVersion)
                     }
                     else if(cellUpdateInfo!.doRemap) {
                         //no change to a cell - just remap
@@ -260,7 +267,7 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
                 }
                 else {
                     //create new objects
-                    newCellInfo = CellInfo.newCellInfo(fromPos,toPos,codeText)
+                    newCellInfo = CellInfo.newCellInfo(fromPos,toPos,codeText,docVersion)
                 }
 
                 cellInfos.push(newCellInfo!)
@@ -276,31 +283,31 @@ function updateCellState(editorState: EditorState, cellUpdateMap: Record<number,
 //--------------------------
 
 /** This method issues any needed session commands from the current state. */
-function issueSessionCommands(editorState: EditorState, cellState: CellState) {
+function issueSessionCommands(editorState: EditorState, docState: DocState) {
     let commands:CodeCommand[] = []
 
     //send all the delete commands if there are any
-    if(cellState.cellsToDelete.length != 0) {
-        cellState.cellsToDelete.forEach(cellInfo => {
+    if(docState.cellsToDelete.length != 0) {
+        docState.cellsToDelete.forEach(cellInfo => {
             let command = createDeleteAction(cellInfo)
             commands.push(command)  
         })    
-        cellState.cellsToDelete = []
+        docState.cellsToDelete = []
     } 
 
     //send update commands based on selection head location (save when the user leaves the line)
     let selectionHead = editorState.selection.asSingle().main.head
     
-    if(cellState.dirtyCells) { 
-        let doUpdateArray = cellState.cellInfos.map(cellInfo => (cellInfo.status == "code dirty") &&
+    if(docState.dirtyCells) { 
+        let doUpdateArray = docState.cellInfos.map(cellInfo => (cellInfo.status == "code dirty") &&
                                                                 ((cellInfo.from > selectionHead) || (cellInfo.to < selectionHead)) )
 
         if(doUpdateArray.includes(true)) {
             let newCellInfos: CellInfo[] = []
-            cellState.cellInfos.forEach( (cellInfo,index) => {
+            docState.cellInfos.forEach( (cellInfo,index) => {
                 if(doUpdateArray[index]) {
                     //create command, return updated cell info
-                    let {newCellInfo,command} = createAddUpdateAction(cellInfo,cellState.cellInfos)
+                    let {newCellInfo,command} = createAddUpdateAction(cellInfo,docState.cellInfos)
                     newCellInfos.push(newCellInfo)
                     commands.push(command)
                 }
@@ -312,15 +319,15 @@ function issueSessionCommands(editorState: EditorState, cellState: CellState) {
             })
 
             //get the updated state
-            cellState = createCellState(newCellInfos,[])
+            docState = createDocState(newCellInfos,[],docState.docVersion)
         }
     }
 
     if(commands.length > 0) {
-        sendCommands(commands)
+        sendCommands(commands,docState.docVersion)
     }
 
-    return cellState
+    return docState
 }
 
 function createDeleteAction(cellInfo: CellInfo) {
@@ -359,9 +366,9 @@ function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
     return {command,newCellInfo}
 }
 
-function sendCommands(commands: CodeCommand[]) {
+function sendCommands(commands: CodeCommand[],docVersion: number) {
     //console.log("Commands to send:")
     //console.log(JSON.stringify(commands))
-    evaluateSessionCmds("ds1",commands)
+    evaluateSessionCmds("ds1",commands,docVersion)
 }
 

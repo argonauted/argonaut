@@ -36,7 +36,7 @@ export default class CellDisplay extends WidgetType {
 
     eq(other: CellDisplay) { 
         return (other.cellInfo.id == this.cellInfo.id) &&
-                (other.cellInfo.version == this.cellInfo.version)
+                (other.cellInfo.instanceVersion == this.cellInfo.instanceVersion)
     }
 
     ignoreEvent() { 

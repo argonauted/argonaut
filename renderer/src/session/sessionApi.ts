@@ -22,6 +22,7 @@ export type SessionOutputEvent = {
         addedPlots?: [string]
         addedValues?: [string]
         evalCompleted?: boolean
+        outputVersion?: number
     },
     nextId?: string
 }
@@ -116,6 +117,12 @@ export function randomIdString() {
 //---------------------------
 
 //TODO - I need to work on session and cmd queue startup
+//cmdQueue notes
+// - One reason to do this is so I can decide to sent the eval cmd or just send a new cmd
+// - There might also be trouble tracking cmds or sending too many to R (probably not that though)
+// - I would like to merge multiple session cmds into one if they are in the queue
+// - Right now it is not robust to failed commands - fix that!
+// - I have to manage fialed commands better generally
 
 export function initDoc(docSessionId: string) {
     let rCmd = `initializeDocState("${docSessionId}")`
@@ -129,11 +136,11 @@ export function initDoc(docSessionId: string) {
     //}
 }
 
-export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[] ) {
+export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
     let childCmdStrings = cmds.map(cmdToCmdListString)
     let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
 
-    let rCmd = `multiCmd("${docSessionId}",${childCmdListString})`
+    let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
     if(sessionCmdPending) {
         rCmdQueue.push(rCmd)
     }
@@ -279,6 +286,7 @@ function onConsoleOut(text: string) {
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
                         currentEvent.data.evalStarted = true
+                        currentEvent.data.outputVersion = msgJson.data.cmdIndex
                         break
                     }
                     case "console": {
@@ -306,6 +314,7 @@ function onConsoleOut(text: string) {
                             sessionOutputEvents.push(currentEvent)
                         }
                         currentEvent.data.evalCompleted = true
+                        currentEvent.data.outputVersion = msgJson.data.cmdIndex //should be the same as above if in the same line
                         //LATER - we need to add next id/index to evaluate
                         lineActive = false
                         currentEvent = null
