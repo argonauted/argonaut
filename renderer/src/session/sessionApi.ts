@@ -38,6 +38,11 @@ type SessionRequestWrapper = {
 /** This is the format of a response from the RSession. */
 type SessionResponse = any
 
+
+type CommandQueueEntry = {
+    f: any,
+    args: IArguments | any[]
+}
 //===========================
 // Fields
 //===========================
@@ -51,13 +56,6 @@ const MESSAGE_HEADER = '|$($|'
 const MESSAGE_FOOTER = '|$)$|'
 
 let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', params: ["111","",0]}
-let DISPLAY_INIT_CMD: SessionRequestWrapper = {scope: "rpc" , method: "set_workbench_metrics", params: [{
-    "consoleWidth":120, 
-    "buildConsoleWidth":120, 
-    "graphicsWidth":600, 
-    "graphicsHeight":300, 
-    "devicePixelRatio":1
-}]}
 
 let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
 
@@ -71,8 +69,12 @@ let activeSession: string | null = null
 let activeLineId: string | null = null
 let lineActive: boolean = false
 
-let sessionCmdPending = false
-let rCmdQueue: string[] = []
+let pendingCommand: CommandQueueEntry | null = null
+let sessionCmdQueue: CommandQueueEntry[] = []
+let cmdDisabled = true
+let cmdDisabledReason = "Init not yet completed!"
+let cmdTimeoutHandle: NodeJS.Timeout | null = null
+
 //===========================
 // Main Functions
 //===========================
@@ -125,51 +127,13 @@ export function randomIdString() {
 // - I have to manage fialed commands better generally
 
 export function initDoc(docSessionId: string) {
-    let rCmd = `initializeDocState("${docSessionId}")`
-    //ADD COMMENTED OUT CODE WHEN I ADD RESPONSE TO INITIALIZE DOC STATE FUNCTION
-    //if(sessionCmdPending) {
-    //    rCmdQueue.push(rCmd)
-    //}
-    //else {
-    //    sessionCmdPending = true
-        sendRCommand(rCmd)
-    //}
+    sendSessionCommand({f: initDocImpl, args: arguments})
 }
 
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
-    let childCmdStrings = cmds.map(cmdToCmdListString)
-    let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
-
-    let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
-    if(sessionCmdPending) {
-        rCmdQueue.push(rCmd)
-    }
-    else {
-        sessionCmdPending = true
-        sendRCommand(rCmd)
-    }
+    sendSessionCommand({f: evaluateSessionCmdsImpl, args: arguments})
 }
-
-function evaluateSessionUpdate(docSessionId: string) {
-    sessionCmdPending = true
-    sendRCommand(`evaluate("${docSessionId}")`)
-}
-
-function sessionCommandCompleted(statusJson: any) {
-    setTimeout(() => {
-        if(rCmdQueue.length > 0) {
-            sendRCommand(rCmdQueue.splice(0,1)[0])
-        }
-        else if(statusJson.data.evalComplete === false) {
-            //more lines to evaluate
-            evaluateSessionUpdate(statusJson.session)
-        }
-        else {
-            sessionCmdPending = false
-        }
-    },0)
-}
-                            
+                
 
 //=================================
 // internal functions
@@ -178,6 +142,49 @@ function sessionCommandCompleted(statusJson: any) {
 //---------------------------
 // Command Helpers
 //---------------------------
+
+function enableSessionCommands() {
+    cmdDisabled = false
+    cmdDisabledReason = ""
+}
+
+function disableSessionCommands(reason: string) {
+    cmdDisabled = true
+    cmdDisabledReason = reason
+}
+
+function sendSessionCommand(cmdEntry: CommandQueueEntry) {
+    if(cmdDisabled) {
+        //FIGURE OUT STANDARD ERROR HANDLING
+        alert("Error! A command could not be sent: " + cmdDisabledReason)
+    }
+
+    if(pendingCommand !== null) {
+        sessionCmdQueue.push(cmdEntry)
+    }
+    else {
+        pendingCommand = cmdEntry
+        cmdEntry.f.apply(null,cmdEntry.args)
+    }
+}
+
+function sendCommandFromQueue() {
+    let cmdEntry = sessionCmdQueue.splice(0,1)[0]
+    cmdEntry.f.apply(null,cmdEntry.args)
+}
+
+function initDocImpl(docSessionId: string) {
+    let rCmd = `initializeDocState("${docSessionId}")`
+    activeSession = docSessionId
+    sendSessionCommandImpl(docSessionId,rCmd)
+}
+
+function evaluateSessionCmdsImpl(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
+    let childCmdStrings = cmds.map(cmdToCmdListString)
+    let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
+    let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
+    sendSessionCommandImpl(docSessionId,rCmd)
+}
 
 function cmdToCmdListString(cmd: CodeCommand) {
     let cmdListString = `list(type="${cmd.type}",lineId="${cmd.lineId}"`
@@ -191,15 +198,62 @@ function cmdToCmdListString(cmd: CodeCommand) {
     return cmdListString
 }
 
-function sendRCommand(rCode: string) {
-    if(!initComplete) {
-        throw new Error("R command can not be sent becaues init is not yet completed")
-    }
-    sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]})
+const EVALUATE_SESSION_COMMAND_ENTRY = {f:null, args: []}
+const SESSION_CMD_TIMEOUT_MSEC = 60000
+
+function evaluateSessionUpdateImpl(docSessionId: string) {
+    pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY //this is a placeholder!
+    sendSessionCommandImpl(docSessionId,`evaluate("${docSessionId}")`)
 }
 
-//--------------------------
-//-------------------------
+function sendSessionCommandImpl(docSessionId: string, rCode: string) {
+    cmdTimeoutHandle = setInterval(sessionCommandTimeout,SESSION_CMD_TIMEOUT_MSEC)
+    sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]},undefined,sessionCommandSendFailed)
+}
+
+function sessionCommandCompleted(statusJson: any) {
+    if(cmdTimeoutHandle !== null) {
+        clearTimeout(cmdTimeoutHandle) 
+        cmdTimeoutHandle = null
+    }
+    setTimeout(() => {
+        if(sessionCmdQueue.length > 0) {
+            sendCommandFromQueue() 
+        }
+        else if(statusJson.data.evalComplete === false) {
+            //more lines to evaluate
+            evaluateSessionUpdateImpl(statusJson.session)
+        }
+        else {
+            pendingCommand = null
+        }
+    },0)
+}
+
+function sessionCommandSendFailed(e: any) {
+    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
+    disableSessionCommands("Send Failed - Recovery Implementation needed")
+}
+
+function sessionCommandErrorResponse(msg: string) {
+    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
+    disableSessionCommands("Session failure response - Recovery Implementation needed")
+}
+            
+function sessionCommandTimeout() {
+    let keepWaiting = confirm("The response is taking a while. Press OK to continue waiting, CANCEL to stop.")
+    if(!keepWaiting) {
+        if(cmdTimeoutHandle !== null) {
+            clearTimeout(cmdTimeoutHandle) 
+            cmdTimeoutHandle = null
+        }
+        alert("Well, actually you still have to keep waiting. We have not other options now.")
+    }
+}
+
+//----------------------------
+// Event functions
+//----------------------------
 
 function dispatch(eventName: string, data: any) {
     let listenerList = listeners[eventName]
@@ -207,12 +261,6 @@ function dispatch(eventName: string, data: any) {
         listenerList.forEach(callback => callback(eventName,data))
     }
 }
-
-
-
-//----------------------------
-// Event listener functions
-//----------------------------
 
 function listenForEvents() {
     try {
@@ -236,19 +284,6 @@ function continueListener() {
 //-------------------------
 // Events handler functions
 //-------------------------
-
-function onInitComplete() {
-    initComplete = true
-    //console.log("R session init complete!")
-
-    //r session is initialized
-    //repdoc session is not really intialized until after these
-    sendCommand(DISPLAY_INIT_CMD)
-    sendRCommand('require(repdoc)')
-    sendRCommand(`initializeSession()`)
-
-    dispatch("initComplete",null)
-}
 
 function onPlotReceived(fileRef: string) {
     let sessionOutputEvent = createSessionOutputEvent(true)
@@ -304,9 +339,9 @@ function onConsoleOut(text: string) {
                         //manage command queue
                         sessionCommandCompleted(msgJson)
         
-                        if(msgJson.session !== activeSession) {
-                            //IS THERE SOMETHING I SHOULD DO HERE?
-                            console.error("Session msg Event not equal to active session")
+                        if((msgJson.session !== activeSession)&&(lineActive)) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            console.error("Session msg Event not equal to active session with line active")
                         }
 
                         if(currentEvent === null) {
@@ -346,9 +381,13 @@ function onConsoleOut(text: string) {
 }
 
 function onConsoleErr(msg: string) {
-    let sessionOutputEvent = createSessionOutputEvent()
-    sessionOutputEvent.data.addedConsoleLines = [["stderr",msg]]
-    dispatch("sessionOutput", [sessionOutputEvent])
+    if(pendingCommand !== null) {
+        //For now I think this means there is a session error
+        sessionCommandErrorResponse(msg)
+    }
+    else {
+        console.error(msg)
+    }
 }
 
 function createSessionOutputEvent(ignoreLineActive = false): SessionOutputEvent {
@@ -385,20 +424,59 @@ function getMessageJson(line: string) {
 }
 
 //-------------------------
+// INIT SEQUENCE
+//-------------------------
+let LOAD_REPDOC_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'execute_r_code', params: ['require(repdoc)']}
+let INIT_SESSION_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'execute_r_code', params: [`initializeSession()`]}
+let DISPLAY_INIT_CMD: SessionRequestWrapper = {scope: "rpc" , method: "set_workbench_metrics", params: [{
+    "consoleWidth":120, 
+    "buildConsoleWidth":120, 
+    "graphicsWidth":600, 
+    "graphicsHeight":300, 
+    "devicePixelRatio":1
+}]}
+
+function initRepdocSequence() {
+    sendCommand(LOAD_REPDOC_CMD,response => {
+        if(response.data.result != "TRUE") {
+            console.error("Error loading repdoc. Application init failed.")
+        }
+        else {
+            sendCommand(INIT_SESSION_CMD,response => {
+                if(response.data.result != "TRUE") {
+                    console.error("Error initializing repdoc session. Application init failed.")
+                }
+                else {
+                    //some r settings
+                    sendCommand(DISPLAY_INIT_CMD)
+
+                    //init complete
+                    initComplete = true
+                    enableSessionCommands()
+                    dispatch("initComplete",null)
+                }
+            })
+        }
+    })
+}
+
+//-------------------------
 // RPC Functions
 //-------------------------
 
 /** This function sends a generic RPC command. If the command includes a field "processResponse",
  * this is called to process the response. The response json is also printed. */
-function sendCommand(cmd: SessionRequestWrapper) {
+function sendCommand(cmd: SessionRequestWrapper, 
+    onResponse?: (arg0: SessionResponse) => void,
+    onError?: (arg0: any) => void) {
     console.log("Send command: " + JSON.stringify(cmd))
     window.rSessionApi.sendRpcRequest(cmd.scope,cmd.method,cmd.params).then( (response: SessionResponse) => {
         console.log("Command response: " + JSON.stringify(response))
-
-        if(cmd.processResponse) cmd.processResponse!(response)
+        if(onResponse !== undefined) onResponse!(response)
     }).catch(e => {
         if(e) console.error(e.toString())
         else console.error("Unknown error in request")
+        if(onError !== undefined) onError!(e)
     })
 }
 
@@ -417,7 +495,7 @@ function getEvents() {
                 try {
                     if(entry.type == "deferred_init_completed") {
                         //init complete
-                        onInitComplete()
+                        initRepdocSequence()
                     }
                     else if(entry.type == "plots_state_changed") {
                         onPlotReceived(entry.data.filename)
