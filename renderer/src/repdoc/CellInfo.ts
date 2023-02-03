@@ -44,15 +44,26 @@ export default class CellInfo {
 
     readonly cellDisplay: CellDisplay
 
-    readonly decoration: Decoration
-    readonly placedDecoration: Range<Decoration>
+    readonly outputDisplay: Decoration | null = null
+    readonly pOutputDisplay: Range<Decoration> | null = null
+
+    readonly lineShading: Decoration | null = null
+    readonly pLineShading: Range<Decoration> | null = null
 
     readonly instanceVersion: number
+
+    pushDecorations(container: Range<Decoration>[]) {
+        if(this.pLineShading !== null) {
+            container.push(this.pLineShading)
+        }
+        if(this.pOutputDisplay != null) {
+            container.push(this.pOutputDisplay)
+        } 
+    }
 
     //IN PROCESS NOTES
     //input version not implemented - ok
     //add versions to evalStart and evalFinish
-
 
     private constructor(refCellInfo: CellInfo | null, {status,from,to,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
@@ -60,6 +71,7 @@ export default class CellInfo {
         }: CellInfoParams) {
 
         let displayChanged = false
+        let statusChanged = false
 
         if(refCellInfo === null) {
             this.id = CellInfo.getId()
@@ -84,6 +96,7 @@ export default class CellInfo {
 
             this.cellDisplay = new CellDisplay(this)
             displayChanged = true
+            statusChanged = true
         }
         else {
             //resuse these fields
@@ -93,9 +106,9 @@ export default class CellInfo {
             this.cellDisplay.setCellInfo(this)
 
             //optionally set these fields
-            if(status !== undefined) {
+            if((status !== undefined)&&(status != refCellInfo.status)) {
                 this.status = status!
-                this.cellDisplay.updateStatus()
+                statusChanged = true
                 displayChanged = true
             }
             else {
@@ -113,7 +126,6 @@ export default class CellInfo {
 
             if(consoleLines !== undefined) {
                 this.consoleLines = consoleLines
-                this.cellDisplay.updateConsole()
                 displayChanged = true
             }
             else {
@@ -122,7 +134,6 @@ export default class CellInfo {
 
             if(plots !== undefined) {
                 this.plots = plots
-                this.cellDisplay.updatePlots()
                 displayChanged = true
             }
             else {
@@ -131,7 +142,6 @@ export default class CellInfo {
 
             if(values !== undefined) {
                 this.values = values
-                this.cellDisplay.updateValues()
                 displayChanged = true
             }
             else {
@@ -142,23 +152,66 @@ export default class CellInfo {
         }
 
         if(displayChanged) {
-            this.decoration = Decoration.widget({
-                widget: this.cellDisplay,
-                block: true,
-                side: 1
-            }) 
-        }
-        else {
-            this.decoration = refCellInfo!.decoration
+            this.cellDisplay.update()
         }
 
-        if( displayChanged || (refCellInfo === undefined) || (refCellInfo!.to != this.to) ) {
-            this.placedDecoration = this.decoration.range(this.to) 
+        if(this.cellDisplay.getIsVisible()) {
+            if(displayChanged) {
+                this.outputDisplay = Decoration.widget({
+                    widget: this.cellDisplay,
+                    block: true,
+                    side: 1
+                }) 
+                this.pOutputDisplay = this.outputDisplay!.range(this.to) 
+            }
+            else {
+                this.outputDisplay = refCellInfo!.outputDisplay
+                if((this.outputDisplay !== null)&&(this.to != refCellInfo!.to)) this.pOutputDisplay = this.outputDisplay!.range(this.to) 
+                else this.pOutputDisplay = refCellInfo!.pOutputDisplay
+            }
+        }
+
+        //load line shading
+        if(statusChanged) {
+            let className: string | null = this.getLineShadingClass()
+            if(className !== null) {
+                this.lineShading = Decoration.line({attributes: {class: className}})
+                this.pLineShading = this.lineShading.range(this.from,this.from)
+            }
         }
         else {
-            this.placedDecoration = refCellInfo!.placedDecoration
+            this.lineShading = refCellInfo!.lineShading
+            if((this.lineShading !== null)&&(this.from != refCellInfo!.from)) {
+                this.pLineShading = this.lineShading.range(this.from,this.from) 
+            }
+            else {
+                this.pLineShading = refCellInfo!.pLineShading
+            }
         }
     }
+
+    //=================================
+    // Private Functions
+    //=================================
+
+    private getLineShadingClass() {
+        switch(this.status) {
+            case "code dirty":
+                return "cm-rd-codeDirtyShade"
+
+            case "code pending":
+            case "value pending":
+                return "cm-rd-valuePendingShade"
+
+            default:
+                return null;
+            
+        }
+    }
+
+    //=================================
+    // Static Functions
+    //=================================
 
     /** This function creates a new cell */
     static newCellInfo(from: number,to: number,docCode: string, docVersion: number) {

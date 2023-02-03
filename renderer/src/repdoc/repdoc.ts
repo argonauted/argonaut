@@ -2,8 +2,26 @@ import {CodeCommand,evaluateSessionCmds,SessionOutputEvent} from "../session/ses
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
-import type { EditorState, Extension, ChangeSet } from '@codemirror/state'
+import type { EditorState, Extension, ChangeSet, Range } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
+
+//===================================
+// Theme
+//===================================
+
+const baseTheme = EditorView.baseTheme({
+    "&light .cm-rd-errText": {color: "red", fontWeight: "bold"},
+    "&light .cm-rd-wrnText": {color: "orange", fontWeight: "bold"},
+    "&light .cm-rd-msgText": {color: "blue"},
+    "&dark .cm-rd-errText": {color: "red", fontWeight: "bold"},
+    "&dark .cm-rd-wrnText": {color: "orange", fontWeight: "bold"},
+    "&dark .cm-rd-msgText": {color: "lightblue"},
+
+    "&light .cm-rd-codeDirtyShade": {backgroundColor: "rgba(200,226,255,0.5)"},
+    "&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(234,234,234,0.5)"},
+    "&dark .cm-rd-codeDirtyShade": {backgroundColor: "rgba(52,26,0,0.5)"},
+    "&dark .cm-rd-valuePendingShade": {backgroundColor: "rgba(31,31,31,0.5)"}
+  })
 
 //===================================
 // Data Structures
@@ -67,6 +85,7 @@ const ReactiveCodeField = StateField.define<DocState>({
 /** This is the extension to interface with the reactive code model and display the output in the editor */
 export const repdoc = (): Extension => {
     return [
+        baseTheme,
         ReactiveCodeField,
     ]
 }
@@ -76,13 +95,17 @@ export const repdoc = (): Extension => {
 //===================================
 
 function createDocState(cellInfos: CellInfo[], cellsToDelete: CellInfo[],docVersion: number): DocState {
+    let decorations: Range<Decoration>[] = []
+    if(cellInfos.length > 0) {
+        cellInfos.forEach(cellInfo => cellInfo.pushDecorations(decorations))
+    }
+
     return {
         docVersion: docVersion,
         cellInfos: cellInfos,
         cellsToDelete: cellsToDelete,
-        decorations: (cellInfos.length > 0) ? 
-            RangeSet.of(cellInfos.map(cellInfo => cellInfo.placedDecoration)) : 
-            Decoration.none,
+        decorations: (decorations.length > 0) ? 
+            RangeSet.of(decorations) : Decoration.none,
         dirtyCells: cellInfos.some(cellInfo => cellInfo.status == "code dirty")
     }
 }
@@ -109,6 +132,15 @@ function processSessionMessages(effects: readonly StateEffect<any>[], docState: 
                     let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
                     if(index >= 0) {
                         newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], sessionOutputData.data)
+
+                        //============================================================================
+                        //update when model code is set to doc code, on either eval start or end.
+
+                        //once other cells are marked as input pending,
+                        //clear cells following this one until:
+                        // - we reach the next id
+                        // - we reach a cell with an input version greater than this value version
+                        //===============================================================================
                     }
                     else {
                         console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
