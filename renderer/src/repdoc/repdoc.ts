@@ -267,11 +267,11 @@ function updateLines(editorState: EditorState, cellUpdateMap: Record<number,Cell
     //get the updated code blocks
     syntaxTree(editorState).iterate({
         enter: (node) => {
-            if (node.name == "CodeExpr") {
+            if( node.name == "ScriptLineCell" || node.name == "ScriptEndCell") {
 
                 let fromPos = node.from
-                let toPos = node.to
-                let codeText = editorState.doc.sliceString(fromPos,toPos+1)
+                let toPos = node.name == "ScriptLineCell" ? node.to - 1 : editorState.doc.length
+                let codeText = editorState.doc.sliceString(fromPos,toPos)
                 //I should annotate the name,assignOp,body within the code block
 
                 let newCellInfo: CellInfo | null = null

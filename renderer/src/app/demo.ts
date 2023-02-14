@@ -3,7 +3,7 @@ import {startSessionListener,addEventListener,initDoc} from "../session/sessionA
 import {EditorView} from "@codemirror/view"
 
 import {basicSetup} from "codemirror"
-import {markdown} from "../lang_markdown_sp/index"
+import {EXAMPLE} from "../../libs/cm-lang-example/index"
 
 import {repdoc,sessionOutputToView} from "../repdoc/repdoc"
 
@@ -42,7 +42,7 @@ function buildUi() {
     extensions: [
       basicSetup,
       repdoc(),
-      markdown(/*{defaultCodeLanguage: javascript()}*/)
+      EXAMPLE()
     ],
     parent: document.querySelector("#editorMD")!
   })

@@ -73,7 +73,8 @@ let pendingCommand: CommandQueueEntry | null = null
 let sessionCmdQueue: CommandQueueEntry[] = []
 let cmdDisabled = true
 let cmdDisabledReason = "Init not yet completed!"
-let cmdTimeoutHandle: NodeJS.Timeout | null = null
+//let cmdTimeoutHandle: NodeJS.Timeout | null = null
+let cmdTimeoutHandle: number | null = null
 
 //===========================
 // Main Functions

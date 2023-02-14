@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
-    "lib": ["es6", "dom", "scripthost"],
+    "lib": ["es2016", "dom", "scripthost"],
+    "types": [
+      "./libs/cm-lang-example/index"
+    ],
     "stripInternal": true,
     "noUnusedLocals": true,
     "strict": true,
-    "target": "es6",
+    "target": "es2016",
     "module": "es2020",
     "newLine": "lf",
     "moduleResolution": "node",
-    "jsx": "react"
+    //"jsx": "react",
   },
-  "include": ["src/**/*.ts","types/*.ts"],
+  "include": ["src/**/*.ts","types/*.ts"]
 }
