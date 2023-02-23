@@ -59,7 +59,7 @@ let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', p
 
 let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
 
-let initComplete = false
+//let initComplete = false
 let eventIndex = 0
 
 let firstPass = true
@@ -73,8 +73,8 @@ let pendingCommand: CommandQueueEntry | null = null
 let sessionCmdQueue: CommandQueueEntry[] = []
 let cmdDisabled = true
 let cmdDisabledReason = "Init not yet completed!"
-//let cmdTimeoutHandle: NodeJS.Timeout | null = null
-let cmdTimeoutHandle: number | null = null
+let cmdTimeoutHandle: NodeJS.Timeout | null = null
+//let cmdTimeoutHandle: Timer | null = null
 
 //===========================
 // Main Functions
@@ -452,7 +452,7 @@ function initRepdocSequence() {
                     sendCommand(DISPLAY_INIT_CMD)
 
                     //init complete
-                    initComplete = true
+                    //initComplete = true
                     enableSessionCommands()
                     dispatch("initComplete",null)
                 }

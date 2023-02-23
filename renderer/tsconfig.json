@@ -1,9 +1,6 @@
 {
   "compilerOptions": {
     "lib": ["es2016", "dom", "scripthost"],
-    "types": [
-      "./libs/cm-lang-example/index"
-    ],
     "stripInternal": true,
     "noUnusedLocals": true,
     "strict": true,

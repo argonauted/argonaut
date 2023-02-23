@@ -184,7 +184,7 @@ function printNonLineOutput(sessionOutputData: any) {
 
 /** This method processes document changes, returning an updated cell state. */
 function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  docState: DocState | undefined = undefined) {
-    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 //increment version here for new document
+    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 //increment version here for new document //create good initial value - not 99
     let {cellUpdateMap, cellsToDelete} = getUpdateInfo(changes,docState)
     let cellInfos = updateLines(editorState, cellUpdateMap,docVersion)
     return createDocState(cellInfos,cellsToDelete,docVersion)
@@ -233,16 +233,16 @@ function getUpdateInfo(changes?: ChangeSet, docState?: DocState) {
 
                 //////////////////////////////////////////
                 //TEMPORARY FIX FOR NOT HANDLING EMPTY LINES IN DELETE 
-                let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
-                if(newTo - newFrom <= 0) {
-                    //a zero length line is currently omitted from the parsed lines
-                    //so it will disappear(!) FIX THAT
-                    //If this line has already been sent to the session, send a delete for it.
-                    if(cellInfo.modelCode !== null) {
-                        cellsToDelete.push(cellInfo)
-                    }
-                }
-                else 
+                // let newTo = doRemap ? changes!.mapPos(cellInfo.to) : cellInfo.to
+                // if(newTo - newFrom <= 0) {
+                //     //a zero length line is currently omitted from the parsed lines
+                //     //so it will disappear(!) FIX THAT
+                //     //If this line has already been sent to the session, send a delete for it.
+                //     if(cellInfo.modelCode !== null) {
+                //         cellsToDelete.push(cellInfo)
+                //     }
+                // }
+                // else 
                 //////////////////////////////////////////
 
                 cellUpdateMap[newFrom] = {cellInfo,doUpdate,doRemap}
@@ -267,10 +267,10 @@ function updateLines(editorState: EditorState, cellUpdateMap: Record<number,Cell
     //get the updated code blocks
     syntaxTree(editorState).iterate({
         enter: (node) => {
-            if( node.name == "ScriptLineCell" || node.name == "ScriptEndCell") {
+            if( node.name == "Cell" || node.name == "EmptyLine") {
 
                 let fromPos = node.from
-                let toPos = node.name == "ScriptLineCell" ? node.to - 1 : editorState.doc.length
+                let toPos = node.to
                 let codeText = editorState.doc.sliceString(fromPos,toPos)
                 //I should annotate the name,assignOp,body within the code block
 

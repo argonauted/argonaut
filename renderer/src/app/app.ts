@@ -2,8 +2,8 @@ import {startSessionListener,addEventListener,initDoc} from "../session/sessionA
 
 import {EditorView} from "@codemirror/view"
 
-import {basicSetup} from "codemirror"
-import {EXAMPLE} from "../../libs/cm-lang-example/index"
+import {setup} from "./setup"
+import {EXAMPLE} from "../../argonaut-lezer-r/src"
 
 import {repdoc,sessionOutputToView} from "../repdoc/repdoc"
 
@@ -40,7 +40,8 @@ function buildUi() {
   view = new EditorView({
     doc: 'set.seed(234)',
     extensions: [
-      basicSetup,
+      setup,
+      //images(), //ignore the name - this does a console log printout of the parse tree
       repdoc(),
       EXAMPLE()
     ],

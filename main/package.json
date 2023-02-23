@@ -4,7 +4,7 @@
   "description": "Test program for r session",
   "main": "./dist/main.js",
   "scripts": {
-    "tsc": "..\\node_modules\\.bin\\tsc.cmd -p tsconfig.json "
+    "tsc": "../node_modules/.bin/tsc.cmd -p tsconfig.json "
   },
   "dependencies": {
     "child_process": "^1.0.2",

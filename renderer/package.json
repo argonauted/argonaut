@@ -4,20 +4,31 @@
   "description": "Test program for r session",
   "main": "./dist/base/main.js",
   "scripts": {
-    "tsc": "..\\node_modules\\.bin\\tsc.cmd -p tsconfig.json -noEmit",
-    "build": ".\\node_modules\\.bin\\esbuild .\\src\\app\\demo.ts --bundle --outfile=.\\dist\\out.js"
+    "test-lezer": "mocha argonaut-lezer-r/test/test.js",
+    "prepare-lezer": "cd argonaut-lezer-r && lezer-generator src/syntax.grammar -o src/parser && rollup -c rollup.config.js",
+    "bld-dev": "cd parserdev && rollup -c rollup.config.js",
+    "bld-app": "rollup -c"
   },
   "dependencies": {
-    "@codemirror/lang-html": "^6.0.0",
-    "@codemirror/language": "^6.3.0",
+    "@lezer/highlight": "^1.0.0",
+    "@lezer/lr": "^1.0.0",
+    "@codemirror/language": "^6.6.0",
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
-    "@lezer/common": "^1.0.0",
-    "@lezer/highlight": "^1.0.0",
-    "codemirror": "^6.0.0"
+    "@codemirror/autocomplete": "^6.4.2",
+    "@codemirror/commands": "^6.2.1",
+    "@codemirror/lint": "^6.1.1",
+    "@codemirror/search": "^6.2.3"
   },
   "devDependencies": {
-    "esbuild": "0.17.4"
+    "@lezer/generator": "^1.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "mocha": "^9.0.1",
+    "rollup": "^2.60.2",
+    "rollup-plugin-dts": "^4.0.1",
+    "rollup-plugin-ts": "^3.0.2",
+    "typescript": "^4.3.4",
+    "express": "^4.18.2"
   },
   "author": "Dave Sutter"
 }

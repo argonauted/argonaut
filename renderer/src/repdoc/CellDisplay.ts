@@ -149,9 +149,9 @@ export default class CellDisplay extends WidgetType {
         }
     }
 
-    private updateValues() {
-        //not implemented
-    }
+    // private updateValues() {
+    //     //not implemented
+    // }
 
     clearActiveValues() {
         this.activeStatus = ""

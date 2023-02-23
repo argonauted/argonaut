@@ -4,13 +4,15 @@
   "description": "Test program for r session",
   "main": "./main/dist/main.js",
   "scripts": {
-    "start": "electron ."
+    "start-app": "electron .",
+    "start-server": "node webserver/server.js"
   },
   "dependencies": {
     "electron": "~22.0.0"
   },
   "devDependencies": {
-    "typescript": "^4.9.4"
+    "typescript": "^4.9.4",
+    "express": "^4.18.2"
   },
   "author": "Dave Sutter"
 }
