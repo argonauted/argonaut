@@ -9,6 +9,7 @@
     "bld-dev": "cd parserdev && rollup -c rollup.config.js",
     "bld-app": "rollup -c"
   },
+  "type": "module",
   "dependencies": {
     "@lezer/highlight": "^1.0.0",
     "@lezer/lr": "^1.0.0",
@@ -21,14 +22,12 @@
     "@codemirror/search": "^6.2.3"
   },
   "devDependencies": {
-    "@lezer/generator": "^1.0.0",
-    "@rollup/plugin-node-resolve": "^15.0.1",
     "mocha": "^9.0.1",
     "rollup": "^2.60.2",
     "rollup-plugin-dts": "^4.0.1",
     "rollup-plugin-ts": "^3.0.2",
-    "typescript": "^4.3.4",
-    "express": "^4.18.2"
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@lezer/generator": "^1.0.0"
   },
   "author": "Dave Sutter"
 }

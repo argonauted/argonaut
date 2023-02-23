@@ -4,12 +4,12 @@
   "description": "Test program for r session",
   "main": "./dist/main.js",
   "scripts": {
-    "tsc": "../node_modules/.bin/tsc.cmd -p tsconfig.json "
+    "tscwin": "..\\node_modules\\.bin\\tsc.cmd -p tsconfig.json",
+    "tsc": "../node_modules/.bin/tsc.cmd -p tsconfig.json"
   },
   "dependencies": {
     "child_process": "^1.0.2",
     "crc": "^4.2.0",
-    "crypto": "^1.0.1",
     "uuid": "^9.0.0"
   },
   "author": "Dave Sutter"

@@ -1,12 +1,12 @@
 import typescript from "rollup-plugin-ts"
 import nodeResolve from "@rollup/plugin-node-resolve"
-import {lezer} from "@lezer/generator/rollup"
 
 export default {
-  input: "src/index.ts",
+  input: "src/main.ts",
   external: id => false,
   output: [
-    {dir: "./dist", format: "es"}
+    {file: "dist/index.cjs", format: "cjs"},
   ],
-  plugins: [lezer(), typescript(),nodeResolve()]
+  plugins: [typescript(),nodeResolve()]
 }
+    
