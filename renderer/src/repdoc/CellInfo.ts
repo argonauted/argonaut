@@ -6,6 +6,8 @@ interface CellInfoParams {
     status?: string
     from?: number
     to?: number
+    fromLine?: number
+    toLine?: number
     docCode?: string
     docVersion?: number
     modelCode?: string | null
@@ -31,6 +33,8 @@ export default class CellInfo {
     readonly status: string
     readonly from: number
     readonly to: number
+    readonly fromLine: number
+    readonly toLine: number
     readonly docCode: string
     readonly docVersion: number
     readonly modelCode: string | null
@@ -65,7 +69,7 @@ export default class CellInfo {
     //input version not implemented - ok
     //add versions to evalStart and evalFinish
 
-    private constructor(refCellInfo: CellInfo | null, {status,from,to,
+    private constructor(refCellInfo: CellInfo | null, {status,from,to,fromLine,toLine,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
             consoleLines,plots,values,outputVersion
         }: CellInfoParams) {
@@ -80,6 +84,8 @@ export default class CellInfo {
             //must be set for creation
             this.from = from!
             this.to = to!
+            this.fromLine = fromLine!,
+            this.toLine = toLine!,
             this.docCode = docCode!
             this.docVersion = docVersion!
             this.inputVersion = inputVersion!
@@ -117,6 +123,9 @@ export default class CellInfo {
             
             this.from = (from !== undefined) ? from! : refCellInfo.from
             this.to = (to !== undefined) ? to! : refCellInfo.to
+            this.fromLine = (fromLine !== undefined) ? fromLine! : refCellInfo.fromLine
+            this.toLine = (toLine !== undefined) ? toLine! : refCellInfo.toLine
+
             this.docCode = (docCode !== undefined) ? docCode! : refCellInfo.docCode
             this.docVersion = (docVersion !== undefined) ? docVersion! : refCellInfo.docVersion
             this.modelCode = (modelCode !== undefined) ? modelCode! : refCellInfo.modelCode
@@ -214,19 +223,19 @@ export default class CellInfo {
     //=================================
 
     /** This function creates a new cell */
-    static newCellInfo(from: number,to: number,docCode: string, docVersion: number) {
+    static newCellInfo(from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
         return new CellInfo(null,{from,to,docCode,docVersion})
     }
 
     /** This function creates an updated cell for when the code changes. */
-    static updateCellInfoCode(cellInfo: CellInfo, from: number, to:number, docCode: string, docVersion: number) {
+    static updateCellInfoCode(cellInfo: CellInfo, from: number, to:number, fromLine: number, toLine:number, docCode: string, docVersion: number) {
         let status = "code dirty"
-        return new CellInfo(cellInfo,{status,from,to,docCode,docVersion})
+        return new CellInfo(cellInfo,{status,from,to,fromLine,toLine,docCode,docVersion})
     }
 
     /** This function creates a remapped cell info for when only the position changes */
-    static remapCellInfo(cellInfo: CellInfo, from: number,to: number) {
-        return new CellInfo(cellInfo,{from,to})
+    static remapCellInfo(cellInfo: CellInfo, from: number,to: number, fromLine: number, toLine:number) {
+        return new CellInfo(cellInfo,{from,to,fromLine,toLine})
     }
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
