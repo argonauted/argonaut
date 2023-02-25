@@ -29,23 +29,28 @@ const baseTheme = EditorView.baseTheme({
 
 
 type DocState = {
-    docVersion: number,
+    docVersion: number
     cellInfos: CellInfo[]
-    cellsToDelete: CellInfo[]
     decorations: RangeSet<Decoration>
-    dirtyCells: boolean
 }
 
-type CellUpdateInfo = {
+enum Action {
+    create,
+    update,
+    delete,
+    remap,
+    reuse
+}
+
+
+export type CellUpdateInfo = {
+    action: Action
     cellInfo?: CellInfo
-    doUpdate: boolean
-    doRemap: boolean
-    newFrom: number
-    newTo: number
-    newFromLine: number
-    newToLine: number
-    text?: string
-    activeEdit: boolean
+    newFrom?: number
+    newTo?: number
+    newFromLine?: number
+    newToLine?: number
+    codeText?: string
 }
 
 //==============================
@@ -76,10 +81,14 @@ const ReactiveCodeField = StateField.define<DocState>({
         if(transaction.effects.length > 0) {
             docState = processSessionMessages(transaction.effects,docState)
         }
+
         if (transaction.docChanged) {
             docState = processDocChanges(transaction.state,transaction.changes,docState)
         }
-        docState = issueSessionCommands(transaction.state,docState)
+        else {
+            docState = processDocChanges(transaction.state,undefined,docState)
+        }
+        
         return docState
     },
 
@@ -100,7 +109,7 @@ export const repdoc = (): Extension => {
 // Internal Functions
 //===================================
 
-function createDocState(cellInfos: CellInfo[], cellsToDelete: CellInfo[],docVersion: number): DocState {
+function createDocState(cellInfos: CellInfo[],docVersion: number): DocState {
     let decorations: Range<Decoration>[] = []
     if(cellInfos.length > 0) {
         cellInfos.forEach(cellInfo => cellInfo.pushDecorations(decorations))
@@ -109,10 +118,8 @@ function createDocState(cellInfos: CellInfo[], cellsToDelete: CellInfo[],docVers
     return {
         docVersion: docVersion,
         cellInfos: cellInfos,
-        cellsToDelete: cellsToDelete,
         decorations: (decorations.length > 0) ? 
-            RangeSet.of(decorations) : Decoration.none,
-        dirtyCells: cellInfos.some(cellInfo => cellInfo.status == "code dirty")
+            RangeSet.of(decorations) : Decoration.none
     }
 }
 
@@ -158,7 +165,7 @@ function processSessionMessages(effects: readonly StateEffect<any>[], docState: 
                 }
             }
 
-            docState = createDocState(newCellInfos,[],docState.docVersion)
+            docState = createDocState(newCellInfos,docState.docVersion)
         }
     }
     return docState
@@ -190,34 +197,98 @@ function printNonLineOutput(sessionOutputData: any) {
 
 /** This method processes document changes, returning an updated cell state. */
 function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  docState: DocState | undefined = undefined) {
-    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 //increment version here for new document //create good initial value - not 99
-    let {cellUpdateInfos, cellsToDelete} = getUpdateInfo(editorState, changes,docState)
-    let {cellInfos,unusedOldCells} = updateLines(editorState, cellUpdateInfos,docVersion)
-    return createDocState(cellInfos,cellsToDelete,docVersion)
+    //increment version here for new document //CREATE A GOOD INITIAL VALUE - not 99
+    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 
+
+    //decide if we want to process the parser output
+    let processParser = Math.random() > 0.5  //fill this in properly 
+
+    //!!!!!!!!!!!!!!!!!!!!!!!!!
+    //I need some additional info I think: which cells are ok for commands, was parse info used, other?
+
+    let cellUpdateInfos: CellUpdateInfo[] | undefined = undefined
+    let cellsToDelete: CellInfo[] | undefined = undefined
+    let nonCommandIndex = 0
+
+    //get cellUpdateInfos and cellsToDelete for remapped cells
+    let {oldCellUpdateInfos, oldCellsToDelete} = getUpdateInfo(editorState, changes, docState)
+    
+    //process the parser output
+    if(processParser) {
+        let {newCellUpdateInfos, newCellsToDelete, parseErrorInfo} = updateLines(editorState, oldCellUpdateInfos, oldCellsToDelete)
+        
+        //these may be undefined, if we deicde no to use the parser
+        cellUpdateInfos = newCellUpdateInfos
+        cellsToDelete = newCellsToDelete 
+
+        //!!!!!!!!!!!!!
+        //If there is an active edit, this should be the index of the active edit
+        nonCommandIndex = cellUpdateInfos !== undefined ? cellUpdateInfos.length : 0 
+
+        //this is a dummy statemtnt to use the parse error info
+        if(parseErrorInfo) console.log("Parser errror!")
+    }
+
+    if( cellUpdateInfos === undefined || cellsToDelete === undefined) {
+        cellUpdateInfos = oldCellUpdateInfos
+        cellsToDelete = oldCellsToDelete 
+        nonCommandIndex = 0  //send no commands
+    } 
+
+    //send commands from this function?
+    let cellInfos = createCellInfos(cellUpdateInfos,docVersion)
+
+    //issue any necessary commands
+    if(nonCommandIndex > 0) {
+        cellInfos = issueSessionCommands(cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+    }
+        
+    //convert cellUpdateInfos(name?) to cell infos and doc staate
+    return createDocState(cellInfos,docVersion)
 }
 
-/** This function gets update data for the cells from the previous stat 
- * This does not use the new parse results. */
+function createCellInfos(cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
+
+    return cellUpdateInfos.map( cui => {
+        switch(cui.action) {
+            case Action.create: 
+                return CellInfo.newCellInfo(cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!,cui.codeText!,docVersion) 
+
+            case Action.update: 
+                return CellInfo.updateCellInfoCode(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!,cui.codeText!,docVersion) 
+
+            case Action.remap: 
+                return CellInfo.remapCellInfo(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!)
+
+            case Action.reuse: 
+                return  cui.cellInfo!
+
+            case Action.delete:
+                throw new Error("Unexpected delete action")
+        }
+    })
+}
+
+
+/** This function gets update data for the cells from the previous state */
 function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?: DocState) {
     let cellUpdateInfos: CellUpdateInfo[] = []
     let cellsToDelete: CellInfo[] = []
 
     let docText = editorState.doc
-    let previousToLine = 0
-
-    let selectionHead = editorState.selection.asSingle().main.head
-    let selectionLine = docText.lineAt(selectionHead).number
 
     //get the update info for each cell
     if((docState !== undefined)&&(changes !== undefined)) {
-        docState!.cellInfos.forEach( (cellInfo) => {
+        let extendUpdateInfo: CellUpdateInfo | undefined = undefined
 
+        docState!.cellInfos.forEach( (cellInfo) => {
             let doDelete = false
             let doUpdate = false
             let doRemap = false
+            let doExtend = false
 
             //check effect of all text edits on this line
-            changes!.iterChangedRanges((fromOld,toOld,fromNew,toNew) => {
+            changes!.iterChangedRanges( (fromOld,toOld,fromNew,toNew) => {
                 if(fromOld < cellInfo.from) {
                     if(toOld < cellInfo.from) {
                         //before the start of this cell - we need to remap
@@ -234,6 +305,7 @@ function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?:
                     //change starts in cell, ends inside or after - update cell
                     doUpdate = true
                     doRemap = true
+                    doExtend = toOld > cellInfo.to
                 }
                 else {
                     //beyond the end of this cell - no impact to the cell
@@ -245,88 +317,70 @@ function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?:
                 cellsToDelete.push(cellInfo)
             }
             else {
-                //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                //DOH! I should only remap a start or end if that position is still present
-                // if not, I need to decide what my new "cell boundaries" are going to be
-                //LOGIC IDEA:
-                // - If we do an edit that removes and adds text to one or more cells, connect the start
-                //   of the lead old cell to the end of the trailing old cell
-                // - when we get to the new tree, if we end up on an empty new line, keep that line fromthe new tree
-                //   and break the old cell to include what is after that line.
-                // - otherwise, if we are not on a new empty line, 
-                //   - if there is a single edit range, then we can just keep the old remapped single cell. We may
-                //     we may have some completed cells above the cursor, but we wil wait until we no longer have
-                //     an active session or we end up on a empty new line.
-                //   - if there are multiple edit ranges, I'm not sure how to handle this. I will just punt and use the
-                //     old tree until we meet one of the above criteria. (Later I can figure somethign more clever out.)
-                //
-                // tldr - when an edit is active, keep the old tree UNTIL the new parse tree puts us on an empty line, Then
-                // just go with the new tree - if we have no errors (Because if we hwave errors, we keep the old tree) 
-                //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-                //cells still present
-                let newFrom = cellInfo.from
-                let newTo = cellInfo.to
-                let newFromLine = cellInfo.fromLine
-                let newToLine = cellInfo.toLine
-
-                if(doRemap) {
-                    newFrom = changes!.mapPos(cellInfo.from)
-                    let fromLineObject = docText.lineAt(newFrom)
-                    newFrom = fromLineObject.from
-                    newFromLine = fromLineObject.number
-
-                    newTo = changes!.mapPos(cellInfo.to)
-                    let toLineObject = docText.lineAt(newTo)
-                    newFrom = toLineObject.from
-                    newToLine = toLineObject.number
+                let cellUpdateInfo: CellUpdateInfo = {
+                    cellInfo: cellInfo,
+                    action: doUpdate ? Action.update : doRemap ? Action.remap : Action.reuse
                 }
 
-                //create placeholder cell update infos for lines that are skipped
-                while(newFromLine - previousToLine > 1) {
-                    
-                    previousToLine += 1
-                    let line = docText.line(previousToLine)
-                    cellUpdateInfos.push({
-                        text: line.text,
-                        doUpdate: true,
-                        doRemap: true,
-                        newFrom: line.from,
-                        newTo: line.to,
-                        newFromLine: line.number,
-                        newToLine: line.number,
-                        activeEdit: (selectionLine == line.number)
-                    })
+                if(doRemap) { 
+                    let fromLineObject = docText.lineAt(changes!.mapPos(cellInfo.from))
+                    cellUpdateInfo.newFrom = fromLineObject.from
+                    cellUpdateInfo.newFromLine = fromLineObject.number
+
+                    if(!doExtend) {
+                        let toLineObject = docText.lineAt(changes!.mapPos(cellInfo.to))
+                        cellUpdateInfo.newTo = toLineObject.to
+                        cellUpdateInfo.newToLine = toLineObject.number
+
+                        if(doUpdate) {
+                            cellUpdateInfo.codeText = docText.sliceString(extendUpdateInfo!.newFrom!,extendUpdateInfo!.newTo)
+                        }
+                    } 
+                }
+                else {
+                    cellUpdateInfo.newFromLine = cellInfo.fromLine
                 }
 
-                //record if this cell has an active edit - selection head is in it and it is dirty
-                let activeEdit = (doUpdate || cellInfo.status == "code dirty") && (newFromLine <= selectionLine) && (newToLine >= selectionLine)
+                //complete the previous cell if needed 
+                if(extendUpdateInfo !== undefined) {
+                    if( (cellUpdateInfo.newToLine === undefined) || (extendUpdateInfo!.newFrom === undefined) ) {
+                        //these cases shouldn't happen, and we have no reasonable recourse if they do
+                        throw new Error("Position info unexpectedly missing from cell update info")
+                    }
 
-                cellUpdateInfos.push({cellInfo,doUpdate,doRemap,newFrom,newTo,newFromLine,newToLine,activeEdit})
+                    extendUpdateInfo!.newToLine = cellUpdateInfo.newFromLine! - 1
+                    extendUpdateInfo!.newTo = cellUpdateInfo.newFrom! - 1  //!!! is this right?
+                    extendUpdateInfo!.codeText = docText.sliceString(extendUpdateInfo!.newFrom!,extendUpdateInfo!.newTo)
+                }
 
-                previousToLine = newToLine
+                extendUpdateInfo = doExtend ? cellUpdateInfo : undefined
+                cellUpdateInfos.push(cellUpdateInfo)
             }
         })
     }
+    else if(docState !== undefined) {
+        //if we have no changes return "reuse" cell update infos
+        cellUpdateInfos.push(...docState.cellInfos.map( cellInfo => { return {action: Action.reuse, cellInfo} })) 
+    }
     
-    return {cellUpdateInfos,cellsToDelete}
+    return {
+        oldCellUpdateInfos: cellUpdateInfos,
+        oldCellsToDelete: cellsToDelete
+    }
 }
 
 /** This function gets the new cell infos based on the new parse tree and the old cell infos */
-function updateLines(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[], docVersion: number) {
+function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInfo[], cellsToDelete: CellInfo[] = []) {
     
     //these are the output cell infos
-    const cellInfos: CellInfo[] = []
+    const newCellUpdateInfos: CellUpdateInfo[] = []
 
     //we use these variables to progress through the cell update info as we process the new parse tree.
-    let currentOldIndex = 0
-    let cellUpdateInfo = cellUpdateInfos.length > 0 ? cellUpdateInfos[currentOldIndex] : undefined
-    let currentOldFromLine = cellUpdateInfo != undefined ? cellUpdateInfo.newFromLine : -1
-    let oldCellUsed = Array(cellUpdateInfos.length).fill(false)
-
-    //record when we reach an actively edited cell
-    let activeEditReached = false
-    let editStartLine = -1 //the lines are actually 1 based, but we will use -1 for invalid
+    let currentOldIndex = -1
+    let oldCellUpdateInfo: CellUpdateInfo | undefined = undefined
+    let currentOldFromLine = -1
+    let oldCellUsed = Array(oldCellUpdateInfos.length).fill(false)
 
     //record if there is a parse error
     let parseError = false
@@ -339,8 +393,8 @@ function updateLines(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[]
     syntaxTree(editorState).iterate({
         enter: (node) => {
 
-            //we stop processing the new tree after an active edit or if there is a parse error
-            if( activeEditReached || parseError ) return
+            //once we reach a parse error, stop processing the tree
+            if( parseError ) return
 
             switch(node.name) {
 
@@ -360,63 +414,58 @@ function updateLines(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[]
                     let codeText = editorState.doc.sliceString(fromPos,toPos)
 
                     //if we have cell update infos, find the one that corresponsds to the current start line
-                    if(cellUpdateInfos !== undefined) {
-                        while((currentOldFromLine < fromLine) && currentOldIndex < cellUpdateInfos!.length - 1) {
+                    if(oldCellUpdateInfos.length > 0) {
+                        while((currentOldFromLine < fromLine) && currentOldIndex < oldCellUpdateInfos!.length - 1) {
                             currentOldIndex++
-                            cellUpdateInfo = cellUpdateInfos![currentOldIndex]
-                            currentOldFromLine = cellUpdateInfo!.newFromLine
-
-                            //as we load the update infos, check if one is actively being edited
-                            //if so, we will stop processing the new tree
-                            //while an edit is in process we keep the previous cells and ignore the new tree
-                            if(cellUpdateInfo.activeEdit) {
-                                activeEditReached = true
-                                editStartLine = currentOldFromLine
-                                //exit the function that processes this node.
-                                return
-                            }
+                            oldCellUpdateInfo = oldCellUpdateInfos![currentOldIndex]
+                            //the following entry should be defined if we get here (maybe use a union coe cell info instead)
+                            currentOldFromLine = oldCellUpdateInfo!.newFromLine!
                         }
                     }
-
-
-
-                    //check for match to this cell
-                    //we need to keep track of "change" and "dirty"
-                    //we need to keep track of errors!
                     
-                    let newCellInfo: CellInfo | null = null
+                    let newCellUpdateInfo: CellUpdateInfo | undefined = undefined 
+                    if( (oldCellUpdateInfo !== undefined) && (oldCellUpdateInfo!.cellInfo !== undefined) &&  (oldCellUpdateInfo!.newFromLine == fromLine)) {
+                        let oldCellInfo = oldCellUpdateInfo!.cellInfo!
+                        oldCellUsed[currentOldIndex] = true
 
-                    if(!activeEditReached) {
-
-                        //we will only save remapped old cells for an edit and any point after
-
-                        //create a new cellInfo
-
-                        if((cellUpdateInfo !== undefined)&&(cellUpdateInfo.cellInfo !== undefined)&&(cellUpdateInfo.newFromLine == fromLine)) {
-                            let oldCellInfo = cellUpdateInfo!.cellInfo
-                            oldCellUsed[currentOldIndex] = true
-
-                            if(codeText !== oldCellInfo.docCode) {
-                                //update to a cell
-                                newCellInfo = CellInfo.updateCellInfoCode(oldCellInfo,fromPos,toPos,fromLine,toLine,codeText,docVersion)
+                        if(codeText !== oldCellInfo.docCode) {
+                            newCellUpdateInfo = {
+                                action: Action.update,
+                                cellInfo: oldCellInfo,
+                                newFrom: fromPos,
+                                newTo: toPos,
+                                newFromLine: fromLine,
+                                newToLine: toLine,
+                                codeText: codeText
                             }
-                            else if( oldCellInfo.from != fromPos || oldCellInfo.to != toPos || oldCellInfo.fromLine != fromLine || oldCellInfo.toLine != toLine ) {
-                                //no change to a cell - just remap
-                                newCellInfo = CellInfo.remapCellInfo(oldCellInfo,fromPos,toPos,fromLine,toLine)
-                            }
-                            else {
-                                //no change - reuse
-                                newCellInfo = oldCellInfo
+                        }
+                        else if( oldCellInfo.from != fromPos || oldCellInfo.to != toPos || oldCellInfo.fromLine != fromLine || oldCellInfo.toLine != toLine ) {
+
+                            newCellUpdateInfo = {
+                                action: Action.remap,
+                                cellInfo: oldCellInfo,
+                                newFrom: fromPos,
+                                newTo: toPos,
+                                newFromLine: fromLine,
+                                newToLine: toLine
                             }
                         }
                         else {
-                            //create new objects
-                            newCellInfo = CellInfo.newCellInfo(fromPos,toPos,fromLine,toLine,codeText,docVersion)
+                            newCellUpdateInfo = oldCellUpdateInfo
                         }
-
-                        cellInfos.push(newCellInfo)
                     }
-                    
+                    else {
+                        newCellUpdateInfo = {
+                            action: Action.create,
+                            newFrom: fromPos,
+                            newTo: toPos,
+                            newFromLine: fromLine,
+                            newToLine: toLine,
+                            codeText: codeText
+                        }
+                    }
+
+                    newCellUpdateInfos.push(newCellUpdateInfo)
                     break
                 }
                  
@@ -431,65 +480,35 @@ function updateLines(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[]
         }
     })
 
-    //NOTE SOME NAMING IS BAD - I switct "old" position and line to mean from the old state or new state values for old cells
-
-    //if we have an actively edited cell or a parse error we will use remapped old cells rather than the new parse info
-    if(parseError || activeEditReached) {
-        if(activeEditReached) {
-            if(cellInfos.length > 0) {
-                //if we created cell infos above, use those
-                let lastNewCellInfo = cellInfos[cellInfos.length-1]
-                if(lastNewCell)
-            }
+    //here we decide if we use the new parse tree info   
+    if( parseError && oldCellUpdateInfos !== undefined ) {
+        //don't use the parse data when we have an error (unless we had not previous info)
+        return {
+            parseErrorInfo:parseError
         }
-    } 
-
-
-    //from here we will save all old cells
-                        //we won't use any of the newly parsed data until the edit is complete
-                        for(let index = currentOldIndex; index < cellUpdateInfos!.length; index++) {
-                            cellUpdateInfo = cellUpdateInfos![index]
-
-                            oldCellUsed[index] = true
-
-
-                            //if we have an ective edit, don't use the newly parsed code
-                            //use the rempped old code
-                            let oldCellInfo = cellUpdateInfo.cellInfo
-
-                            if(oldCellInfo !== undefined) {
-                                let newCellInfo = CellInfo.remapCellInfo(oldCellInfo!,fromPos,toPos,fromLine,toLine)
-                                cellInfos.push(newCellInfo)
-                            }
-                            else {
-                                let codeText = (cellUpdateInfo.text != undefined) ? cellUpdateInfo.text! : "" //this should be defined
-                                let newCellInfo = CellInfo.newCellInfo(cellUpdateInfo.newFrom,cellUpdateInfo.newTo,
-                                                                    cellUpdateInfo.newFromLine,cellUpdateInfo.newToLine,
-                                                                    codeText,docVersion)
-                                cellInfos.push(newCellInfo)
-                            }
-
-                        }
-
-    //record all old cells that were continued into new cell infos
-    let unusedOldCells: CellInfo[] = []
-    if(cellUpdateInfos !== undefined) {
+    }
+    else {
+        //additional cells we need to delete
+        let unusedOldCells: CellInfo[] = []
         oldCellUsed.forEach( (cellUsed,index) => {
             if(!cellUsed) {
-                let cellInfo = cellUpdateInfos![index].cellInfo
+                let cellInfo = oldCellUpdateInfos![index].cellInfo
                 if(cellInfo !== undefined) {
                     unusedOldCells.push(cellInfo)
                 }
             }
         })
+        if(unusedOldCells.length > 0) {
+            cellsToDelete = cellsToDelete.concat(unusedOldCells)
+        }
+
+        return {
+            newCellUpdateInfos: newCellUpdateInfos,
+            newCellsToDelete: cellsToDelete,
+            parseErrorInfo:parseError
+        }
     }
-
-
-    //we need to also return info about what index in the cellinfos is in active edit
-    //we need to process errors!
-
-
-    return {cellInfos,unusedOldCells}
+    
 }
 
 //--------------------------
@@ -497,51 +516,35 @@ function updateLines(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[]
 //--------------------------
 
 /** This method issues any needed session commands from the current state. */
-function issueSessionCommands(editorState: EditorState, docState: DocState) {
+function issueSessionCommands(activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
     let commands:CodeCommand[] = []
+    let updatedCellInfos: CellInfo[] = []
 
     //send all the delete commands if there are any
-    if(docState.cellsToDelete.length != 0) {
-        docState.cellsToDelete.forEach(cellInfo => {
-            let command = createDeleteAction(cellInfo)
-            commands.push(command)  
-        })    
-        docState.cellsToDelete = []
-    } 
+    cellInfosToDelete.forEach(cellInfo => {
+        commands.push(createDeleteAction(cellInfo)) 
+    })     
 
-    //send update commands based on selection head location (save when the user leaves the line)
-    let selectionHead = editorState.selection.asSingle().main.head
-    
-    if(docState.dirtyCells) { 
-        let doUpdateArray = docState.cellInfos.map(cellInfo => (cellInfo.status == "code dirty") &&
-                                                                ((cellInfo.from > selectionHead) || (cellInfo.to < selectionHead)) )
-
-        if(doUpdateArray.includes(true)) {
-            let newCellInfos: CellInfo[] = []
-            docState.cellInfos.forEach( (cellInfo,index) => {
-                if(doUpdateArray[index]) {
-                    //create command, return updated cell info
-                    let {newCellInfo,command} = createAddUpdateAction(cellInfo,docState.cellInfos)
-                    newCellInfos.push(newCellInfo)
-                    commands.push(command)
-                }
-                else {
-                    //no change to the cell info
-                    newCellInfos.push(cellInfo)
-                }
-
-            })
-
-            //get the updated state
-            docState = createDocState(newCellInfos,[],docState.docVersion)
+    //send create/update commands for any cell with code dirty beneat the non-command index
+    for(let index = 0; index < nonCommandIndex; index++) {
+        let cellInfo = activeCellInfos[index]
+        if(cellInfo.status == "code dirty") {
+            let {newCellInfo,command} = createAddUpdateAction(cellInfo,index)
+            updatedCellInfos.push(newCellInfo)
+            commands.push(command) 
+        }
+        else {
+            updatedCellInfos.push(cellInfo)
         }
     }
 
+    //send commands
     if(commands.length > 0) {
-        sendCommands(commands,docState.docVersion)
+        sendCommands(commands,docVersion)
     }
 
-    return docState
+    //return modified cell infos
+    return updatedCellInfos
 }
 
 function createDeleteAction(cellInfo: CellInfo) {
@@ -553,7 +556,7 @@ function createDeleteAction(cellInfo: CellInfo) {
     return command
 }
 
-function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
+function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number) {
     let command: CodeCommand = {
         type: "",
         lineId: cellInfo.id,
@@ -561,17 +564,10 @@ function createAddUpdateAction(cellInfo: CellInfo, cellInfos: CellInfo[]) {
         
     }
     if(cellInfo.modelCode === null) {
-        let lineNumber0Base = cellInfos.indexOf(cellInfo)
-        if(lineNumber0Base < 0) {
-            //HANDLE BETTER THAN THIS!!!
-            throw new Error("Line not found!")
-        }
-        //console.log("Add command: id = " + cellInfo.id)
         command.type = "add"
-        command.after = lineNumber0Base //the after value is one less than the 1-based line nubmer
+        command.after = zeroBasedIndex //NOTE: the after value is one less than the 1-based index, which is just the zero based index
     }
     else {
-        //console.log("Update command: id = " + cellInfo.id)
         command.type = "update"
     }
 

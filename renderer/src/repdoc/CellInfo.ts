@@ -224,7 +224,7 @@ export default class CellInfo {
 
     /** This function creates a new cell */
     static newCellInfo(from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
-        return new CellInfo(null,{from,to,docCode,docVersion})
+        return new CellInfo(null,{from,to,fromLine,toLine,docCode,docVersion})
     }
 
     /** This function creates an updated cell for when the code changes. */
