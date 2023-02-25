@@ -2,7 +2,7 @@ import {CodeCommand,evaluateSessionCmds,SessionOutputEvent} from "../session/ses
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
-import type { EditorState, Extension, ChangeSet, Range } from '@codemirror/state'
+import type { EditorState, Transaction, Extension, ChangeSet, Range } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 
 //===================================
@@ -31,6 +31,8 @@ const baseTheme = EditorView.baseTheme({
 type DocState = {
     docVersion: number
     cellInfos: CellInfo[]
+    parseTreeCurrent: boolean
+    hasParseErrors: boolean
     decorations: RangeSet<Decoration>
 }
 
@@ -79,17 +81,9 @@ const ReactiveCodeField = StateField.define<DocState>({
 
     update(docState, transaction) {
         if(transaction.effects.length > 0) {
-            docState = processSessionMessages(transaction.effects,docState)
+            docState = processSessionMessages(transaction,docState)
         }
-
-        if (transaction.docChanged) {
-            docState = processDocChanges(transaction.state,transaction.changes,docState)
-        }
-        else {
-            docState = processDocChanges(transaction.state,undefined,docState)
-        }
-        
-        return docState
+        return processDocChanges(transaction.state,transaction,docState)
     },
 
     provide(docState) {
@@ -109,7 +103,7 @@ export const repdoc = (): Extension => {
 // Internal Functions
 //===================================
 
-function createDocState(cellInfos: CellInfo[],docVersion: number): DocState {
+function createDocState(cellInfos: CellInfo[],docVersion: number,parseTreeUsed: boolean, hasParseErrors: boolean): DocState {
     let decorations: Range<Decoration>[] = []
     if(cellInfos.length > 0) {
         cellInfos.forEach(cellInfo => cellInfo.pushDecorations(decorations))
@@ -118,6 +112,8 @@ function createDocState(cellInfos: CellInfo[],docVersion: number): DocState {
     return {
         docVersion: docVersion,
         cellInfos: cellInfos,
+        parseTreeCurrent: parseTreeUsed,
+        hasParseErrors: hasParseErrors,
         decorations: (decorations.length > 0) ? 
             RangeSet.of(decorations) : Decoration.none
     }
@@ -129,7 +125,9 @@ function createDocState(cellInfos: CellInfo[],docVersion: number): DocState {
 
 /** This function process session messages, which are passed in as transaction effects. 
  * It returns an updated docState. */
-function processSessionMessages(effects: readonly StateEffect<any>[], docState: DocState) {
+function processSessionMessages(transaction: Transaction, docState: DocState) {
+
+    let effects: readonly StateEffect<any>[] = transaction.effects
 
     //let sessionEventEffects = effects.filter(effect => effect.is(sessionEventEffect))
 
@@ -165,7 +163,7 @@ function processSessionMessages(effects: readonly StateEffect<any>[], docState: 
                 }
             }
 
-            docState = createDocState(newCellInfos,docState.docVersion)
+            docState = createDocState(newCellInfos,docState.docVersion,docState.parseTreeCurrent,docState.hasParseErrors)
         }
     }
     return docState
@@ -196,55 +194,110 @@ function printNonLineOutput(sessionOutputData: any) {
 //--------------------------
 
 /** This method processes document changes, returning an updated cell state. */
-function processDocChanges(editorState: EditorState, changes: ChangeSet | undefined = undefined,  docState: DocState | undefined = undefined) {
-    //increment version here for new document //CREATE A GOOD INITIAL VALUE - not 99
-    let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 
-
-    //decide if we want to process the parser output
-    let processParser = Math.random() > 0.5  //fill this in properly 
-
-    //!!!!!!!!!!!!!!!!!!!!!!!!!
-    //I need some additional info I think: which cells are ok for commands, was parse info used, other?
-
-    let cellUpdateInfos: CellUpdateInfo[] | undefined = undefined
-    let cellsToDelete: CellInfo[] | undefined = undefined
-    let nonCommandIndex = 0
-
-    //get cellUpdateInfos and cellsToDelete for remapped cells
-    let {oldCellUpdateInfos, oldCellsToDelete} = getUpdateInfo(editorState, changes, docState)
+function processDocChanges(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
     
-    //process the parser output
-    if(processParser) {
-        let {newCellUpdateInfos, newCellsToDelete, parseErrorInfo} = updateLines(editorState, oldCellUpdateInfos, oldCellsToDelete)
+
+    //check if we want to process the parse tree
+    let processParseTree = getProcessParseTree(editorState, transaction, docState) 
+
+    //update the document if there are changes or if we want to use the document parse tree
+    if( (transaction && transaction.docChanged) || processParseTree ) {
+
+        let cellUpdateInfos: CellUpdateInfo[] | undefined = undefined
+        let cellsToDelete: CellInfo[] | undefined = undefined
+        let nonCommandIndex = 0
+        let parseTreeUsed = false
+        let hasParseErrors = false 
+
+        //get cellUpdateInfos and cellsToDelete for remapped cells
+        let {oldCellUpdateInfos, oldCellsToDelete} = getOldCellUpdates(editorState, transaction!, docState)
         
-        //these may be undefined, if we deicde no to use the parser
-        cellUpdateInfos = newCellUpdateInfos
-        cellsToDelete = newCellsToDelete 
+        //process the parser output
+        if(processParseTree) {
+            let {newCellUpdateInfos, newCellsToDelete, parseErrorInfo, newActiveEditIndex} = getNewCellUpdates(editorState, oldCellUpdateInfos, oldCellsToDelete)
+            
+            //these may be undefined, if we deicde no to use the parser
+            if(parseErrorInfo == false) {
+                cellUpdateInfos = newCellUpdateInfos
+                cellsToDelete = newCellsToDelete 
+                nonCommandIndex = newActiveEditIndex
+                parseTreeUsed = true
+            }
+            else {
+                hasParseErrors = true
+            }
+        }
+        else {
+            hasParseErrors = docState !== undefined ? docState!.hasParseErrors : false
+        }
 
-        //!!!!!!!!!!!!!
-        //If there is an active edit, this should be the index of the active edit
-        nonCommandIndex = cellUpdateInfos !== undefined ? cellUpdateInfos.length : 0 
+        if( cellUpdateInfos === undefined || cellsToDelete === undefined) {
+            cellUpdateInfos = oldCellUpdateInfos
+            cellsToDelete = oldCellsToDelete 
+            nonCommandIndex = 0  //send no commands
+        } 
 
-        //this is a dummy statemtnt to use the parse error info
-        if(parseErrorInfo) console.log("Parser errror!")
+        //increment version here for new document //CREATE A GOOD INITIAL VALUE - not 99
+        let docVersion = (docState !== undefined) ? docState.docVersion + 1 : 99 
+
+        //send commands from this function?
+        let cellInfos = createCellInfos(cellUpdateInfos,docVersion)
+
+        //issue any necessary commands
+        if(nonCommandIndex > 0) {
+            cellInfos = issueSessionCommands(cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+        }
+            
+        //convert cellUpdateInfos(name?) to cell infos and doc staate
+        return createDocState(cellInfos,docVersion,parseTreeUsed,hasParseErrors)
+    }
+    else {
+        //we should only get here is there is no doc state
+        if(docState === undefined) throw new Error("Unexpected: doc state misssing")
+
+        //no update
+        return docState!
+    }
+}
+
+function getProcessParseTree(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
+    
+    if(docState === undefined) {
+        //if this is the first pass, use the parse tree
+        return true
     }
 
-    if( cellUpdateInfos === undefined || cellsToDelete === undefined) {
-        cellUpdateInfos = oldCellUpdateInfos
-        cellsToDelete = oldCellsToDelete 
-        nonCommandIndex = 0  //send no commands
-    } 
-
-    //send commands from this function?
-    let cellInfos = createCellInfos(cellUpdateInfos,docVersion)
-
-    //issue any necessary commands
-    if(nonCommandIndex > 0) {
-        cellInfos = issueSessionCommands(cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+    if(transaction && transaction.docChanged) {
+        //if there are new edits
+        //use the parse tree if we are in an empty cell created by adding (rather than deleting)
+        if(textAdded(transaction.changes)) { 
+            let activeLineObject = editorState.doc.lineAt(editorState.selection.main.head)
+            if(activeLineObject.text.trim() == "") {
+                let lineEndPos = activeLineObject.to
+                let node = syntaxTree(editorState).resolve(lineEndPos,1)
+                return (node.name == "EmptyLine" || node.name == "EmptyEnd")
+            }
+        }
+        return false
     }
-        
-    //convert cellUpdateInfos(name?) to cell infos and doc staate
-    return createDocState(cellInfos,docVersion)
+    else {
+        //if there are no new edits
+        //use the parse tree if the document is not current
+        //and there are no errors
+        //and there is no active eidt
+        if(docState.parseTreeCurrent || docState.hasParseErrors ) return false
+
+        let activeLine = editorState.doc.lineAt(editorState.selection.main.head).number
+        let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
+
+        return activeCellInfo === undefined || activeCellInfo!.status == "code dirty"
+    }
+}
+
+function textAdded(changes: ChangeSet) {
+    let textAdded = false
+    changes.iterChanges( (oldFrom,oldT,newFrom,newTo,text) => { if(text.length > 0) textAdded = true })
+    return textAdded
 }
 
 function createCellInfos(cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
@@ -271,14 +324,15 @@ function createCellInfos(cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
 
 
 /** This function gets update data for the cells from the previous state */
-function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?: DocState) {
+function getOldCellUpdates(editorState: EditorState, transaction: Transaction, docState?: DocState) {
     let cellUpdateInfos: CellUpdateInfo[] = []
     let cellsToDelete: CellInfo[] = []
 
     let docText = editorState.doc
 
     //get the update info for each cell
-    if((docState !== undefined)&&(changes !== undefined)) {
+    if((docState !== undefined)&&(transaction.docChanged)) {
+        let changes = transaction.changes
         let extendUpdateInfo: CellUpdateInfo | undefined = undefined
 
         docState!.cellInfos.forEach( (cellInfo) => {
@@ -288,7 +342,7 @@ function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?:
             let doExtend = false
 
             //check effect of all text edits on this line
-            changes!.iterChangedRanges( (fromOld,toOld,fromNew,toNew) => {
+            changes.iterChangedRanges( (fromOld,toOld,fromNew,toNew) => {
                 if(fromOld < cellInfo.from) {
                     if(toOld < cellInfo.from) {
                         //before the start of this cell - we need to remap
@@ -324,12 +378,12 @@ function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?:
                 }
 
                 if(doRemap) { 
-                    let fromLineObject = docText.lineAt(changes!.mapPos(cellInfo.from))
+                    let fromLineObject = docText.lineAt(changes.mapPos(cellInfo.from))
                     cellUpdateInfo.newFrom = fromLineObject.from
                     cellUpdateInfo.newFromLine = fromLineObject.number
 
                     if(!doExtend) {
-                        let toLineObject = docText.lineAt(changes!.mapPos(cellInfo.to))
+                        let toLineObject = docText.lineAt(changes.mapPos(cellInfo.to))
                         cellUpdateInfo.newTo = toLineObject.to
                         cellUpdateInfo.newToLine = toLineObject.number
 
@@ -371,10 +425,17 @@ function getUpdateInfo(editorState: EditorState, changes?: ChangeSet, docState?:
 }
 
 /** This function gets the new cell infos based on the new parse tree and the old cell infos */
-function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInfo[], cellsToDelete: CellInfo[] = []) {
+function getNewCellUpdates(editorState: EditorState, oldCellUpdateInfos: CellUpdateInfo[], cellsToDelete: CellInfo[] = []) {
     
     //these are the output cell infos
     const newCellUpdateInfos: CellUpdateInfo[] = []
+
+    //record if there is a parse error
+    let parseError = false
+
+    //this is the index of a cell that is actively being edited
+    let activeEditIndex = -1
+
 
     //we use these variables to progress through the cell update info as we process the new parse tree.
     let currentOldIndex = -1
@@ -382,11 +443,12 @@ function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInf
     let currentOldFromLine = -1
     let oldCellUsed = Array(oldCellUpdateInfos.length).fill(false)
 
-    //record if there is a parse error
-    let parseError = false
+    
 
     //used to read line nubers from positions
     let docText = editorState.doc
+
+    let selectionLine = docText.lineAt(editorState.selection.main.head).number
 
     //walk through the new parse tree
     //and craete new cell infos
@@ -412,6 +474,9 @@ function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInf
                     let fromLine = startLine.number
                     let toLine = endLine.number
                     let codeText = editorState.doc.sliceString(fromPos,toPos)
+
+                    //record the current cell index
+                    if(fromLine <= selectionLine && toLine >= selectionLine) activeEditIndex = newCellUpdateInfos.length
 
                     //if we have cell update infos, find the one that corresponsds to the current start line
                     if(oldCellUpdateInfos.length > 0) {
@@ -484,7 +549,8 @@ function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInf
     if( parseError && oldCellUpdateInfos !== undefined ) {
         //don't use the parse data when we have an error (unless we had not previous info)
         return {
-            parseErrorInfo:parseError
+            parseErrorInfo:parseError,
+            newActiveEditIndex: activeEditIndex
         }
     }
     else {
@@ -505,7 +571,8 @@ function updateLines(editorState: EditorState, oldCellUpdateInfos: CellUpdateInf
         return {
             newCellUpdateInfos: newCellUpdateInfos,
             newCellsToDelete: cellsToDelete,
-            parseErrorInfo:parseError
+            parseErrorInfo:parseError,
+            newActiveEditIndex: activeEditIndex
         }
     }
     
