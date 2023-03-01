@@ -51,7 +51,7 @@ type CellUpdateInfo = {
     cellInfo?: CellInfo
     newFrom?: number
     newTo?: number
-    newFromLine?: number
+    newFromLine: number //we require this one
     newToLine?: number
     codeText?: string
 }
@@ -64,6 +64,32 @@ const INITIAL_DOCUMENT_VERSION = 0
 
 const INVALID_CELL_INDEX = -1
 const INVALID_LINE_NUMBER = -1 //line number is 1 based
+
+//=============================
+// Accessors for the above types
+//=============================
+
+function getCUIFrom(cui: CellUpdateInfo) {
+    if(cui.newFrom !== undefined) return cui.newFrom
+    else if(cui.cellInfo !== undefined) return cui.cellInfo!.from
+    else throw new Error("Unexpected: position not found in cell update info")
+}
+
+function getCUIFromLine(cui: CellUpdateInfo) {
+    return cui.newFromLine
+}
+
+function getCUITo(cui: CellUpdateInfo) {
+    if(cui.newTo !== undefined) return cui.newTo
+    else if(cui.cellInfo !== undefined) return cui.cellInfo!.to
+    else throw new Error("Unexpected: position not found in cell update info")
+}
+
+function getCUIToLine(cui: CellUpdateInfo) {
+    if(cui.newToLine !== undefined) return cui.newToLine
+    else if(cui.cellInfo !== undefined) return cui.cellInfo!.toLine
+    else throw new Error("Unexpected: position not found in cell update info")
+}
 
 //==============================
 // Sesssion Event Processing
@@ -206,65 +232,118 @@ function printNonLineOutput(sessionOutputData: any) {
 
 /** This method processes changes from the editor, returning an updated doc state. */
 function processDocChanges(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
-    
-    //SHOULD RENAME THIS TO something about processing the parse tree rather than using
-    let useParseTree = getUseParseTree(editorState, transaction, docState) 
-
-    if( (transaction && transaction.docChanged) || useParseTree ) {
-
-        let cellUpdateInfos: CellUpdateInfo[] | undefined = undefined
-        let cellsToDelete: CellInfo[] | undefined = undefined
-        let nonCommandIndex = 0
-        let parseTreeUsed = false
-        let hasParseErrors = false 
-
-        let {oldCellUpdateInfos, oldCellsToDelete} = updateOldCells(editorState, transaction!, docState)
-        
-        if(useParseTree) {
-            let {newCellUpdateInfos, newCellsToDelete, parseErrorInfo, newActiveEditIndex, newActiveEditType} = 
-                parseNewCells(editorState, oldCellUpdateInfos, oldCellsToDelete)
-            
-            if( useCompletedParseInfo(docState, parseErrorInfo, newActiveEditIndex, newActiveEditType) ) {
-                cellUpdateInfos = newCellUpdateInfos
-                cellsToDelete = newCellsToDelete 
-                nonCommandIndex = getNonCommandIndex(cellUpdateInfos,newActiveEditIndex)
-                parseTreeUsed = true
-            }
-            else {
-                hasParseErrors = parseErrorInfo.hasError
-            }
-        }
-        else {
-            hasParseErrors = docState !== undefined ? docState!.hasParseErrors : false
-        }
-
-        if( cellUpdateInfos === undefined || cellsToDelete === undefined) {
-            cellUpdateInfos = oldCellUpdateInfos
-            cellsToDelete = oldCellsToDelete 
-            nonCommandIndex = 0  //send no commands
-        } 
-
+    let doParseTreeProcess = getProcessParseTree(editorState, transaction, docState) 
+    if( (transaction && transaction.docChanged) || doParseTreeProcess ) {
         let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION 
-
+        let {cellUpdateInfos,cellsToDelete,hasParseErrors,nonCommandIndex,parseTreeUsed} = getCellUpdateInfo(editorState,transaction,docState,doParseTreeProcess)
         let cellInfos = createCellInfos(cellUpdateInfos,docVersion)
-
-        if( nonCommandIndex > 0 || cellsToDelete.length > 0 ) {
+        if( nonCommandIndex > 0 || cellsToDelete!.length > 0 ) {
             cellInfos = issueSessionCommands(cellInfos,cellsToDelete,docVersion,nonCommandIndex)
         }
-            
         return createDocState(cellInfos,docVersion,parseTreeUsed,hasParseErrors)
     }
     else {
-        //no change to doc state
         if(docState === undefined) throw new Error("Unexpected: doc state misssing") //this shouldn't happen
-
         return docState!
+    }
+}
+
+function getCellUpdateInfo(editorState: EditorState, 
+                            transaction: Transaction | undefined = undefined, 
+                            docState: DocState | undefined = undefined,
+                            doParseTreeProcess: boolean) {
+
+    let {oldCellUpdateInfos, oldCellsToDelete} = updateOldCells(editorState, transaction!, docState)
+    let oldHasParseError = docState !== undefined ? docState!.hasParseErrors : false
+    
+    if(doParseTreeProcess) {
+        let {newCellUpdateInfos, newCellsToDelete, parseErrorInfo, newActiveEditIndex, newActiveEditType} = 
+            parseNewCells(editorState, oldCellUpdateInfos, oldCellsToDelete)
+
+        let fallbackDataPresent = docState !== undefined
+        return mergeCellUpdateInfos(newCellUpdateInfos,newCellsToDelete,parseErrorInfo,
+                                    oldCellUpdateInfos,oldCellsToDelete,oldHasParseError,
+                                    fallbackDataPresent, newActiveEditIndex, newActiveEditType)
+    }
+    else {
+        //use old parse info
+        return {
+            cellUpdateInfos: oldCellUpdateInfos,
+            cellsToDelete: oldCellsToDelete,
+            hasParseErrors: oldHasParseError,
+            nonCommandIndex: 0, //send no commands
+            parseTreeUsed: false
+        }
+    } 
+
+}
+
+function mergeCellUpdateInfos(newCellUpdateInfos: CellUpdateInfo[], newCellsToDelete: CellInfo[], parseErrorInfo: ParseErrorInfo,
+                            oldCellUpdateInfos: CellUpdateInfo[], oldCellsToDelete: CellInfo[], oldHasParseError: boolean,
+                            fallbackDataPresent: boolean, newActiveEditIndex: number, newActiveEditType: string) {
+
+    //ASSUME old data present == fallbackDataPresent
+    
+    //if there is no fallback info, use all the parse tree data
+    if( fallbackDataPresent ) {
+        return {
+            cellUpdateInfos: newCellUpdateInfos,
+            cellsToDelete: newCellsToDelete,
+            hasParseErrors: parseErrorInfo.hasError,
+            nonCommandIndex: newCellUpdateInfos!.length, //for now send them all - we probably want to change this
+            parseTreeUsed: true
+        }
+    }
+
+    //we will not use parse info if there are any parse errors, since this can blow up the tree
+    if( parseErrorInfo.hasError === true) {
+        return {
+            cellUpdateInfos: oldCellUpdateInfos,
+            cellsToDelete: oldCellsToDelete,
+            hasParseErrors: true,
+            nonCommandIndex: 0, //send no commands
+            parseTreeUsed: false
+        }
+    }
+
+    //no active edit - use all the parsed data
+    if( newActiveEditIndex == INVALID_CELL_INDEX ) {
+        //HERE WE WANT TO MERGE THE CELL INFOS!!!!
+        return {
+            cellUpdateInfos: newCellUpdateInfos!,
+            cellsToDelete: newCellsToDelete!,
+            hasParseErrors: parseErrorInfo.hasError,
+            nonCommandIndex: newCellUpdateInfos!.length, //for now send them all - TBR
+            parseTreeUsed: true
+        }
+    }
+
+    //!!! UPDATE THIS
+    //active edit, with an empty cell active - use up to that cell!!!
+    if(isEmptyCell(newActiveEditType)) {
+        //go only up to the edit type cell!
+        return {
+            cellUpdateInfos: newCellUpdateInfos,
+            cellsToDelete: newCellsToDelete,
+            hasParseErrors: parseErrorInfo.hasError,
+            nonCommandIndex: newActiveEditIndex,
+            parseTreeUsed: true
+        }
+    }
+
+    // edit in process (without empty cell) or no new parse info
+    return {
+        cellUpdateInfos: oldCellUpdateInfos,
+        cellsToDelete: oldCellsToDelete,
+        hasParseErrors: oldHasParseError,
+        nonCommandIndex: 0, //send no commands
+        parseTreeUsed: false
     }
 }
 
 
 /** This function decides if we want to use the parse tree, or propogate the old cells ourselves. */
-function getUseParseTree(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
+function getProcessParseTree(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
     
     if(docState === undefined) {
         //if this is the first pass, use the parse tree
@@ -277,14 +356,7 @@ function getUseParseTree(editorState: EditorState, transaction: Transaction | un
         //(I think this logic assumes there is on edit included here, to get the result intended)
         if(textAdded(transaction.changes)) { 
             let activeLineObject = editorState.doc.lineAt(editorState.selection.main.head)
-            if(activeLineObject.text.trim() == "") {
-                return true
-                //THE LOGIC FOR EMPTY PARSE ELEMENT DIDN"T WORK (at least for empty end)
-                //FOR NOW AI WILL JUST USE THE PARSE TREE ON AN EMPTY LINE FROM TEXT ADDITION
-                //let lineEndPos = activeLineObject.to
-                //let node = syntaxTree(editorState).resolve(lineEndPos,1)
-                //return (node.name == "EmptyLine" || node.name == "EmptyEnd")
-            }
+            return (activeLineObject.text.trim() == "")
         }
         else return false
     }
@@ -313,31 +385,6 @@ function isCellDirty(activeCellInfo: CellInfo) {
     return activeCellInfo.status == "code dirty"
 }
 
-function useCompletedParseInfo( docState: DocState | undefined = undefined, 
-                                parseErrorInfo: ParseErrorInfo,
-                                activeEditIndex: number,
-                                activeEditType: string) {
-    //CLEAT THIS COMMENT OUT LATER? OR REFINE THIS?  TEMPORARLY LOGIC?
-    //use the parse info if we are here and: 
-    // - we have no fallback state
-    // - we are not in an active edit
-    // - we are in an active edit, but on an empty line
-    //note that we would not be here if we did not use the parser: if there was a document change, we are on an empty
-    //line and we added text (meaning we are not in the middle of typing on a line and we did not delete back to 
-    //an empty line) 
-
-    //there is no fallback if there is no docstate
-    if( docState === undefined ) return true
-
-    //we will not use parse info if there are any parse errors, since this can blow up the tree
-    if( parseErrorInfo.hasError === true) return false
-
-
-    //if there is an active edit, we will not use the parse data, unless the active data is an empty cell
-    return activeEditIndex == INVALID_CELL_INDEX || isEmptyCell(activeEditType) 
-     
-}
-
 function isEmptyCell(nodeName: string) {
     return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
 }
@@ -346,28 +393,19 @@ function actionIsAnEdit(action: Action) {
     return action == Action.create || action == Action.update || action == Action.delete
 }
 
-function getNonCommandIndex(cellUpdateInfos: CellUpdateInfo[] | undefined, newActiveEditIndex: number) {
-    if(cellUpdateInfos != undefined) {
-        return newActiveEditIndex == INVALID_CELL_INDEX ? cellUpdateInfos.length : newActiveEditIndex
-    }
-    else {
-        return 0
-    }
-}
-
 /** This function creates a CellInfo object from a CellUpdateInfo. */
 function createCellInfos(cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
 
     return cellUpdateInfos.map( cui => {
         switch(cui.action) {
             case Action.create: 
-                return CellInfo.newCellInfo(cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!,cui.codeText!,docVersion) 
+                return CellInfo.newCellInfo(cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
 
             case Action.update: 
-                return CellInfo.updateCellInfoCode(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!,cui.codeText!,docVersion) 
+                return CellInfo.updateCellInfoCode(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
 
             case Action.remap: 
-                return CellInfo.remapCellInfo(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine!,cui.newToLine!)
+                return CellInfo.remapCellInfo(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!)
 
             case Action.reuse: 
                 return  cui.cellInfo!
@@ -390,12 +428,13 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
     if(docState !== undefined) {
         if(transaction.docChanged) {
             let changes = transaction.changes
-            let prevChangedUpdateInfo: CellUpdateInfo | null = null
+            let prevSavedUpdateInfo: CellUpdateInfo | null = null
 
             docState!.cellInfos.forEach( (cellInfo) => {
                 let doDelete = false
                 let doUpdate = false
                 let doRemap = false
+                let extendedNewTo: number | null = null
 
                 //check effect of all text edits on this line
                 changes.iterChangedRanges( (fromOld,toOld,fromNew,toNew) => {
@@ -415,6 +454,11 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
                         //change starts in cell, ends inside or after - update cell
                         doUpdate = true
                         doRemap = true
+
+                        if(toOld > cellInfo.to) {
+                            //add this new stuff to the current cel
+                            extendedNewTo = toNew
+                        }
                     }
                     else {
                         //beyond the end of this cell - no impact to the cell
@@ -423,13 +467,16 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
 
                 if(doDelete) {
                     //cells that are no longer present
-                    cellsToDelete.push(cellInfo)
+                    if(!cellInfo.needsCreate()) {
+                        cellsToDelete.push(cellInfo)
+                    }
                 }
                 else {
 
                     let cellUpdateInfo: CellUpdateInfo = {
                         cellInfo: cellInfo,
-                        action: doUpdate ? Action.update : doRemap ? Action.remap : Action.reuse
+                        action: doUpdate ? Action.update : doRemap ? Action.remap : Action.reuse,
+                        newFromLine: 0 //reset below
                     }
 
                     if(doRemap) { 
@@ -437,7 +484,10 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
                         cellUpdateInfo.newFrom = fromLineObject.from
                         cellUpdateInfo.newFromLine = fromLineObject.number
 
-                        let toLineObject = docText.lineAt(changes.mapPos(cellInfo.to))
+                        //we extend this cell if the addition goes past the end
+                        let newToPos = extendedNewTo !== null ? extendedNewTo : changes.mapPos(cellInfo.to)
+
+                        let toLineObject = docText.lineAt(newToPos)
                         cellUpdateInfo.newTo = toLineObject.to
                         cellUpdateInfo.newToLine = toLineObject.number
 
@@ -448,37 +498,37 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
                     }
                     else {
                         cellUpdateInfo.newFromLine = cellInfo.fromLine
-                        cellUpdateInfo.newFrom = cellInfo.from
                     }
 
                     //extend the previous cell if needed 
-                    if(prevChangedUpdateInfo !== null) {
-                        //NOTE - we require several items be set here, and they should be. I should enforce that better
-                        //prevChanged - this was doUpdate/doRemap
-                        //current - this is doRemap at least
-
-                        if(prevChangedUpdateInfo!.newToLine != cellUpdateInfo.newFromLine - 1) {
-                            prevChangedUpdateInfo!.newToLine = cellUpdateInfo.newFromLine! - 1
-                            prevChangedUpdateInfo!.newTo = cellUpdateInfo.newFrom! - 1  
-                            prevChangedUpdateInfo!.codeText = docText.sliceString(prevChangedUpdateInfo!.newFrom!,prevChangedUpdateInfo!.newTo)
+                    if(prevSavedUpdateInfo !== null) {
+                        if(getCUIToLine(prevSavedUpdateInfo!) != getCUIFromLine(cellUpdateInfo!) - 1) {
+                            //add a cell in the space between the previous and current cells
+                            let newFromLine = getCUIToLine(prevSavedUpdateInfo!) + 1
+                            let newFrom = getCUITo(prevSavedUpdateInfo!) + 1
+                            let newToLine = getCUIFromLine(cellUpdateInfo) - 1
+                            let newTo = getCUIFrom(cellUpdateInfo) - 1
+                            let codeText = docText.sliceString(newFrom,newTo)
+                            cellUpdateInfos.push({action:Action.create,newFromLine,newFrom,newToLine,newTo,codeText})
                         }
                     }
 
-                    if(doUpdate) prevChangedUpdateInfo = cellUpdateInfo
-                    else prevChangedUpdateInfo = null
-
+                    prevSavedUpdateInfo = cellUpdateInfo
                     cellUpdateInfos.push(cellUpdateInfo)
                 }
             })
 
             //extend the last cell if needed
             if(cellUpdateInfos.length > 0) {
-                //NOTE - I require newFrom to be on here
-                //I am setting it, but I don't enfore that in a solid way and I think it well be error prone
                 let lastUpdateInfo = cellUpdateInfos[cellUpdateInfos.length-1]
-                if(lastUpdateInfo.newTo != docText.length ) {
-                    lastUpdateInfo.newTo = docText.length
-                    lastUpdateInfo.codeText = docText.sliceString(lastUpdateInfo!.newFrom!,lastUpdateInfo!.newTo)
+                if(getCUIToLine(lastUpdateInfo) != docText.lines ) {
+                    //add a cell to fill the end of the document
+                    let newFromLine = getCUIToLine(lastUpdateInfo) + 1
+                    let newFrom = getCUITo(lastUpdateInfo) + 1
+                    let newToLine = docText.lines
+                    let newTo =docText.length
+                    let codeText = docText.sliceString(newFrom,newTo)
+                    cellUpdateInfos.push({action:Action.create,newFromLine,newFrom,newToLine,newTo,codeText})
                 }
             }
         }
@@ -487,7 +537,6 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
             cellUpdateInfos.push(...docState!.cellInfos.map( cellInfo => { return {
                 action: Action.reuse, 
                 cellInfo,
-                newFrom: cellInfo.from, 
                 newFromLine: cellInfo.fromLine
             } })) 
         }
@@ -519,8 +568,6 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
     let oldCellUpdateInfo: CellUpdateInfo | undefined = undefined
     let currentOldFromLine = INVALID_LINE_NUMBER
     let oldCellUsed = Array(oldCellUpdateInfos.length).fill(false)
-
-    
 
     //used to read line nubers from positions
     let docText = editorState.doc
@@ -564,10 +611,10 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
                             currentOldIndex++
                             oldCellUpdateInfo = oldCellUpdateInfos![currentOldIndex]
                             //the following entry should be defined if we get here (maybe use a union coe cell info instead)
-                            currentOldFromLine = oldCellUpdateInfo!.newFromLine!
+                            currentOldFromLine = oldCellUpdateInfo!.newFromLine
                         }
                     }
-                    
+
                     let newCellUpdateInfo: CellUpdateInfo | undefined = undefined 
                     if( (oldCellUpdateInfo !== undefined) && (oldCellUpdateInfo!.cellInfo !== undefined) &&  (oldCellUpdateInfo!.newFromLine == fromLine)) {
                         let oldCellInfo = oldCellUpdateInfo!.cellInfo!
@@ -600,7 +647,8 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
                         else {
                             newCellUpdateInfo = {
                                 action: Action.reuse,
-                                cellInfo: oldCellInfo
+                                cellInfo: oldCellInfo,
+                                newFromLine: fromLine
                             }
                         }
                     }
@@ -613,7 +661,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
                             newToLine: toLine,
                             codeText: codeText
                         }
-                    }
+                    }           
 
                     newCellUpdateInfos.push(newCellUpdateInfo)
                     break
@@ -641,39 +689,27 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
         }
     }
 
-    //here we decide if we use the new parse tree info   
-    if( parseErrorInfo.hasError && oldCellUpdateInfos !== undefined ) {
-        //don't use the parse data when we have an error (unless we had not previous info)
-        return {
-            parseErrorInfo:parseErrorInfo,
-            newActiveEditIndex: activeEditIndex,
-            newActiveEditType: activeEditType
-        }
-    }
-    else {
-        //additional cells we need to delete
-        let unusedOldCells: CellInfo[] = []
-        oldCellUsed.forEach( (cellUsed,index) => {
-            if(!cellUsed) {
-                let cellInfo = oldCellUpdateInfos![index].cellInfo
-                if(cellInfo !== undefined) {
-                    unusedOldCells.push(cellInfo)
-                }
+    //additional cells we need to delete
+    let unusedOldCells: CellInfo[] = []
+    oldCellUsed.forEach( (cellUsed,index) => {
+        if(!cellUsed) {
+            let cellInfo = oldCellUpdateInfos![index].cellInfo
+            if(cellInfo !== undefined && !cellInfo.needsCreate() ) {
+                unusedOldCells.push(cellInfo)
             }
-        })
-        if(unusedOldCells.length > 0) {
-            cellsToDelete = cellsToDelete.concat(unusedOldCells)
         }
-
-        return {
-            newCellUpdateInfos: newCellUpdateInfos,
-            newCellsToDelete: cellsToDelete,
-            parseErrorInfo: parseErrorInfo,
-            newActiveEditIndex: activeEditIndex,
-            newActiveEditType: activeEditType
-        }
+    })
+    if(unusedOldCells.length > 0) {
+        cellsToDelete = cellsToDelete.concat(unusedOldCells)
     }
-    
+
+    return {
+        newCellUpdateInfos: newCellUpdateInfos,
+        newCellsToDelete: cellsToDelete,
+        parseErrorInfo: parseErrorInfo,
+        newActiveEditIndex: activeEditIndex,
+        newActiveEditType: activeEditType
+    }
 }
 
 //--------------------------
@@ -731,9 +767,9 @@ function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number) {
         code: cellInfo.docCode
         
     }
-    if(cellInfo.modelCode === null) {
+    if(cellInfo.needsCreate()) {
         command.type = "add"
-        command.after = zeroBasedIndex //NOTE: the after value is one less than the 1-based index, which is just the zero based index
+        command.after = zeroBasedIndex //NOTE: the after value is 1-based index - 1, which is just the zero based index
     }
     else {
         command.type = "update"

@@ -76,6 +76,10 @@ let cmdDisabledReason = "Init not yet completed!"
 let cmdTimeoutHandle: NodeJS.Timeout | null = null
 //let cmdTimeoutHandle: Timer | null = null
 
+let maxEvalLine: number | null = null  //add notation for whether this is 1 based or 0 based!!!
+let pendingLineIndex: number | null = null
+let pendingEvalSession: string | null = null //when I have mutliple sessions, I will need to make a map of pending lines
+
 //===========================
 // Main Functions
 //===========================
@@ -113,6 +117,22 @@ export function randomIdString() {
     //and express it as a string in the largest base possible
     //Prefix with a letter ("f" for field) so we can use this as a field name symbol in R (as in data$f4j543k45) 
     return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
+}
+
+export function setMaxEvalLine(maxLine: number) {
+    maxEvalLine = maxLine
+    if(sessionEvaluateNeeded()) {
+        if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
+        evaluateSessionUpdateImpl(pendingEvalSession)
+    }
+}
+
+export function clearMaxEvalLine() {
+    maxEvalLine = null
+    if(sessionEvaluateNeeded()) {
+        if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
+        evaluateSessionUpdateImpl(pendingEvalSession)
+    }
 }
 
 //---------------------------
@@ -203,7 +223,7 @@ const EVALUATE_SESSION_COMMAND_ENTRY = {f:null, args: []}
 const SESSION_CMD_TIMEOUT_MSEC = 60000
 
 function evaluateSessionUpdateImpl(docSessionId: string) {
-    pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY //this is a placeholder!
+    pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY
     sendSessionCommandImpl(docSessionId,`evaluate("${docSessionId}")`)
 }
 
@@ -213,6 +233,15 @@ function sendSessionCommandImpl(docSessionId: string, rCode: string) {
 }
 
 function sessionCommandCompleted(statusJson: any) {
+    if(statusJson.data.evalComplete) {
+        pendingLineIndex = null
+        pendingEvalSession = null
+    }
+    else {
+        pendingLineIndex = statusJson.data.nextLineIndex
+        pendingEvalSession = statusJson.session
+    }
+
     if(cmdTimeoutHandle !== null) {
         clearTimeout(cmdTimeoutHandle) 
         cmdTimeoutHandle = null
@@ -221,7 +250,7 @@ function sessionCommandCompleted(statusJson: any) {
         if(sessionCmdQueue.length > 0) {
             sendCommandFromQueue() 
         }
-        else if(statusJson.data.evalComplete === false) {
+        else if(sessionEvaluateNeeded()) {
             //more lines to evaluate
             evaluateSessionUpdateImpl(statusJson.session)
         }
@@ -229,6 +258,10 @@ function sessionCommandCompleted(statusJson: any) {
             pendingCommand = null
         }
     },0)
+}
+
+function sessionEvaluateNeeded() {
+    return pendingLineIndex !== null && (maxEvalLine != null || maxEvalLine! > pendingLineIndex!)
 }
 
 function sessionCommandSendFailed(e: any) {

@@ -199,6 +199,10 @@ export default class CellInfo {
         }
     }
 
+    needsCreate() {
+        return (this.modelCode == null)
+    }
+
     //=================================
     // Private Functions
     //=================================
