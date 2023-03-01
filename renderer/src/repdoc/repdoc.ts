@@ -60,7 +60,7 @@ type ParseErrorInfo = {
     hasError: boolean
 }
 
-const INITIAL_DOCUMENT_VERSION = 0
+const INITIAL_DOCUMENT_VERSION = 1
 
 const INVALID_CELL_INDEX = -1
 const INVALID_LINE_NUMBER = -1 //line number is 1 based
@@ -180,6 +180,18 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                     if(index >= 0) {
                         newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], sessionOutputData.data)
 
+                        //THIS ONLY WORKS IF WE ONLY GET ONE MESSAGE LIKE THIS
+                        //update the input version for all values past this cell
+                        //set the output version for the ones that do not need to be evaluted
+                        if(sessionOutputData.data.docEvalCompleted === false && sessionOutputData.data.nextLineIndex !== undefined ) {
+                            let inputVersion = sessionOutputData.data.outputVersion!
+                            let needsEval = sessionOutputData.data.nextLineIndex - 1 //NOTE - rturn value is 1 based index!!!
+                            for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
+                                let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
+                                newCellInfos[i3] = CellInfo.updateCellInfoDisplay(newCellInfos[i3],{inputVersion,outputVersion})
+                            }
+                        }
+
                         //============================================================================
                         //update when model code is set to doc code, on either eval start or end.
 
@@ -202,6 +214,7 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
             docState = createDocState(newCellInfos,docState.docVersion,docState.parseTreeCurrent,docState.hasParseErrors)
         }
     }
+
     return docState
 }
 
@@ -285,7 +298,7 @@ function mergeCellUpdateInfos(newCellUpdateInfos: CellUpdateInfo[], newCellsToDe
     //ASSUME old data present == fallbackDataPresent
     
     //if there is no fallback info, use all the parse tree data
-    if( fallbackDataPresent ) {
+    if( !fallbackDataPresent ) {
         return {
             cellUpdateInfos: newCellUpdateInfos,
             cellsToDelete: newCellsToDelete,
@@ -308,7 +321,6 @@ function mergeCellUpdateInfos(newCellUpdateInfos: CellUpdateInfo[], newCellsToDe
 
     //no active edit - use all the parsed data
     if( newActiveEditIndex == INVALID_CELL_INDEX ) {
-        //HERE WE WANT TO MERGE THE CELL INFOS!!!!
         return {
             cellUpdateInfos: newCellUpdateInfos!,
             cellsToDelete: newCellsToDelete!,
@@ -321,7 +333,7 @@ function mergeCellUpdateInfos(newCellUpdateInfos: CellUpdateInfo[], newCellsToDe
     //!!! UPDATE THIS
     //active edit, with an empty cell active - use up to that cell!!!
     if(isEmptyCell(newActiveEditType)) {
-        //go only up to the edit type cell!
+        //UPDATE THIS! go only up to the edit type cell!
         return {
             cellUpdateInfos: newCellUpdateInfos,
             cellsToDelete: newCellsToDelete,
@@ -455,8 +467,8 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
                         doUpdate = true
                         doRemap = true
 
-                        if(toOld > cellInfo.to) {
-                            //add this new stuff to the current cel
+                        if(toOld >= cellInfo.to) {
+                            //if the edit includes the end of the cell, stretch the cell to all the new text
                             extendedNewTo = toNew
                         }
                     }
@@ -730,7 +742,7 @@ function issueSessionCommands(activeCellInfos: CellInfo[], cellInfosToDelete: Ce
     //for(let index = 0; index < nonCommandIndex; index++) {
     activeCellInfos.forEach( (cellInfo,index) => {
         if( cellInfo.status == "code dirty" && index < nonCommandIndex ) {
-            let {newCellInfo,command} = createAddUpdateAction(cellInfo,index)
+            let {newCellInfo,command} = createAddUpdateAction(cellInfo,index,docVersion)
             updatedCellInfos.push(newCellInfo)
             commands.push(command) 
         }
@@ -760,7 +772,7 @@ function createDeleteAction(cellInfo: CellInfo) {
 
 /** This function creates an add or update command for the cell Info and returns
  * the updated cell infos associated with sending the command. */
-function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number) {
+function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number, docVersion: number) {
     let command: CodeCommand = {
         type: "",
         lineId: cellInfo.id,
@@ -775,7 +787,7 @@ function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number) {
         command.type = "update"
     }
 
-    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(cellInfo)
+    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(cellInfo, docVersion)
 
     return {command,newCellInfo}
 }

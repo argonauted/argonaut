@@ -20,12 +20,13 @@ interface CellInfoParams {
 }
 
 interface DisplayStateParams {
-    evalStarted?: boolean
-    evalCompleted?: boolean
+    cellEvalStarted?: boolean
+    cellEvalCompleted?: boolean
     addedConsoleLines?: [string,string][]
     addedPlots?: string[]
     addedValues?: string[]
-    outputVersion?: number
+    outputVersion?: number,
+    inputVersion?: number
 }
 
 export default class CellInfo {
@@ -244,13 +245,13 @@ export default class CellInfo {
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
     static updateCellInfoDisplay(cellInfo: CellInfo, 
-        {evalStarted, evalCompleted, addedConsoleLines, addedPlots, addedValues, outputVersion}: DisplayStateParams) {
+        {cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, outputVersion, inputVersion}: DisplayStateParams) {
         
         //output version required if evalStarted or evalCompleted is set
         
-        if(evalStarted === true) {
+        if(cellEvalStarted === true) {
             //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
-            cellInfo = new CellInfo(cellInfo,{status: "value pending", consoleLines: [], plots: [], values: [], outputVersion})
+            cellInfo = new CellInfo(cellInfo,{status: "value pending", consoleLines: [], plots: [], values: []})
         }
 
         let params: CellInfoParams = {}
@@ -259,20 +260,23 @@ export default class CellInfo {
         if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
         if(addedValues !== undefined) params.values = cellInfo.values.concat(addedValues)
 
-        if(evalCompleted === true) {
+        params.outputVersion = outputVersion
+        params.inputVersion = inputVersion
+
+        if(cellEvalCompleted === true) {
             params.status = "code clean"
-            if(outputVersion !== undefined) params.outputVersion = outputVersion!
         }
 
         return new CellInfo(cellInfo,params)
     }
 
     /** This function creates a update cell info for when session commands are sent (to craete or update the cell) */
-    static updateCellInfoForCommand(cellInfo: CellInfo): CellInfo {
+    static updateCellInfoForCommand(cellInfo: CellInfo, currentDocVersion: number): CellInfo {
         let status = "code pending"
         let modelCode = cellInfo.docCode
         let modelVersion = cellInfo.docVersion
-        return new CellInfo(cellInfo,{status,modelCode,modelVersion})
+        let inputVersion = currentDocVersion
+        return new CellInfo(cellInfo,{status,modelCode,modelVersion,inputVersion})
     }
 
     //for now we make a dummy id here

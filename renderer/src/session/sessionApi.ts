@@ -17,12 +17,14 @@ export type SessionOutputEvent = {
     session: string | null,
     lineId: string | null
     data: {
-        evalStarted?: boolean
+        cellEvalStarted?: boolean
         addedConsoleLines?: [string,string][]
         addedPlots?: [string]
         addedValues?: [string]
-        evalCompleted?: boolean
+        cellEvalCompleted?: boolean
         outputVersion?: number
+        docEvalCompleted?: boolean
+        nextLineIndex?: number
     },
     nextId?: string
 }
@@ -261,7 +263,7 @@ function sessionCommandCompleted(statusJson: any) {
 }
 
 function sessionEvaluateNeeded() {
-    return pendingLineIndex !== null && (maxEvalLine != null || maxEvalLine! > pendingLineIndex!)
+    return pendingLineIndex !== null && (maxEvalLine == null || maxEvalLine! > pendingLineIndex!)
 }
 
 function sessionCommandSendFailed(e: any) {
@@ -354,7 +356,7 @@ function onConsoleOut(text: string) {
         
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
-                        currentEvent.data.evalStarted = true
+                        currentEvent.data.cellEvalStarted = true
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
                         break
                     }
@@ -382,9 +384,16 @@ function onConsoleOut(text: string) {
                             currentEvent = createSessionOutputEvent()
                             sessionOutputEvents.push(currentEvent)
                         }
-                        currentEvent.data.evalCompleted = true
-                        currentEvent.data.outputVersion = msgJson.data.cmdIndex //should be the same as above if in the same line
+                        currentEvent.data.cellEvalCompleted = true
+                        currentEvent.data.outputVersion = msgJson.data.cmdIndex
+
                         //LATER - we need to add next id/index to evaluate
+                        //ADDING THIS
+                        currentEvent.data.docEvalCompleted = msgJson.data.evalComplete
+                        if(!msgJson.data.evalComplete) {
+                            currentEvent.data.nextLineIndex = msgJson.data.nextLineIndex
+                        }
+
                         lineActive = false
                         currentEvent = null
                         break
