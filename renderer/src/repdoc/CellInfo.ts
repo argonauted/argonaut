@@ -1,6 +1,8 @@
 import CellDisplay from "./CellDisplay"
 import {Decoration} from "@codemirror/view"
-import type {Range, } from '@codemirror/state'
+import type {Range, EditorState} from '@codemirror/state'
+
+const INVALID_VERSION_NUMBER = -1
 
 interface CellInfoParams {
     status?: string
@@ -39,13 +41,13 @@ export default class CellInfo {
     readonly docCode: string
     readonly docVersion: number
     readonly modelCode: string | null
-    readonly modelVersion: number
-    readonly inputVersion: number
+    readonly modelVersion: number = INVALID_VERSION_NUMBER
+    readonly inputVersion: number = INVALID_VERSION_NUMBER
 
     readonly consoleLines: [string,string][]
     readonly plots: string[]
     readonly values: string[]
-    readonly outputVersion: number
+    readonly outputVersion: number = INVALID_VERSION_NUMBER
 
     readonly cellDisplay: CellDisplay
 
@@ -53,34 +55,28 @@ export default class CellInfo {
     readonly pOutputDisplay: Range<Decoration> | null = null
 
     readonly lineShading: Decoration | null = null
-    readonly pLineShading: Range<Decoration> | null = null
+    readonly pLineShadings: Range<Decoration>[] | null = null
 
     readonly instanceVersion: number
 
     pushDecorations(container: Range<Decoration>[]) {
-        if(this.pLineShading !== null) {
-            container.push(this.pLineShading)
+        if(this.pLineShadings !== null) {
+            container.push(...this.pLineShadings)
         }
         if(this.pOutputDisplay != null) {
             container.push(this.pOutputDisplay)
         } 
     }
 
-    //IN PROCESS NOTES
-    //input version not implemented - ok
-    //add versions to evalStart and evalFinish
-
-    private constructor(refCellInfo: CellInfo | null, {status,from,to,fromLine,toLine,
+    private constructor(editorState: EditorState, refCellInfo: CellInfo | null, {from,to,fromLine,toLine,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
             consoleLines,plots,values,outputVersion
         }: CellInfoParams) {
 
         let displayChanged = false
-        let statusChanged = false
 
         if(refCellInfo === null) {
             this.id = CellInfo.getId()
-            this.status = "code dirty"
 
             //must be set for creation
             this.from = from!
@@ -88,22 +84,24 @@ export default class CellInfo {
             this.fromLine = fromLine!,
             this.toLine = toLine!,
             this.docCode = docCode!
+
+            if(docVersion == undefined) throw new Error("Unexpected: doc version not set for new cellinfo")
             this.docVersion = docVersion!
-            this.inputVersion = inputVersion!
+
+            if(inputVersion !== undefined) this.inputVersion = inputVersion
 
             this.modelCode = null
-            this.modelVersion = 0
+            if(modelVersion !== undefined) this.modelVersion = modelVersion
 
             this.instanceVersion = 1
 
             this.consoleLines = []
             this.plots = []
             this.values = []
-            this.outputVersion = 0
+            if(outputVersion !== undefined) this.outputVersion = INVALID_VERSION_NUMBER
 
             this.cellDisplay = new CellDisplay(this)
             displayChanged = true
-            statusChanged = true
         }
         else {
             //resuse these fields
@@ -111,16 +109,6 @@ export default class CellInfo {
             this.instanceVersion = refCellInfo!.instanceVersion + 1 //assume we move forward only
             this.cellDisplay = refCellInfo!.cellDisplay
             this.cellDisplay.setCellInfo(this)
-
-            //optionally set these fields
-            if((status !== undefined)&&(status != refCellInfo.status)) {
-                this.status = status!
-                statusChanged = true
-                displayChanged = true
-            }
-            else {
-                this.status = refCellInfo.status
-            }
             
             this.from = (from !== undefined) ? from! : refCellInfo.from
             this.to = (to !== undefined) ? to! : refCellInfo.to
@@ -161,6 +149,13 @@ export default class CellInfo {
             this.outputVersion = (outputVersion !== undefined) ? outputVersion! : refCellInfo.outputVersion
         }
 
+        //determine the status
+        if(this.docVersion > this.modelVersion) this.status = "code dirty"
+        else if(this.modelVersion > this.outputVersion || this.inputVersion > this.outputVersion) this.status = "value pending"
+        else this.status = "code clean"
+        let statusChanged = (refCellInfo !== null) ? (this.status != refCellInfo!.status) : true
+        if(statusChanged) displayChanged = true
+
         if(displayChanged) {
             this.cellDisplay.update()
         }
@@ -182,20 +177,37 @@ export default class CellInfo {
         }
 
         //load line shading
+        let setLineShading = false
         if(statusChanged) {
             let className: string | null = this.getLineShadingClass()
             if(className !== null) {
                 this.lineShading = Decoration.line({attributes: {class: className}})
-                this.pLineShading = this.lineShading.range(this.from,this.from)
+                setLineShading = true
             }
         }
         else {
             this.lineShading = refCellInfo!.lineShading
             if((this.lineShading !== null)&&(this.from != refCellInfo!.from)) {
-                this.pLineShading = this.lineShading.range(this.from,this.from) 
+                setLineShading = true 
             }
             else {
-                this.pLineShading = refCellInfo!.pLineShading
+                this.pLineShadings = refCellInfo!.pLineShadings
+            }
+            
+        }
+
+        if(setLineShading) {
+            this.pLineShadings = []
+            for(let lineNum = this.fromLine; lineNum <= this.toLine; lineNum++) {
+                let lineStartPos = -1
+                if(lineNum == this.fromLine) {
+                    lineStartPos = this.from
+                }
+                else {
+                    //we pass the editor state just so we can read the line start here when there are multiple lines in the cell
+                    lineStartPos = editorState.doc.line(lineNum).from
+                }
+                this.pLineShadings.push(this.lineShading!.range(lineStartPos,lineStartPos))
             }
         }
     }
@@ -213,7 +225,6 @@ export default class CellInfo {
             case "code dirty":
                 return "cm-rd-codeDirtyShade"
 
-            case "code pending":
             case "value pending":
                 return "cm-rd-valuePendingShade"
 
@@ -228,30 +239,29 @@ export default class CellInfo {
     //=================================
 
     /** This function creates a new cell */
-    static newCellInfo(from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
-        return new CellInfo(null,{from,to,fromLine,toLine,docCode,docVersion})
+    static newCellInfo(editorState: EditorState, from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
+        return new CellInfo(editorState,null,{from,to,fromLine,toLine,docCode,docVersion})
     }
 
     /** This function creates an updated cell for when the code changes. */
-    static updateCellInfoCode(cellInfo: CellInfo, from: number, to:number, fromLine: number, toLine:number, docCode: string, docVersion: number) {
-        let status = "code dirty"
-        return new CellInfo(cellInfo,{status,from,to,fromLine,toLine,docCode,docVersion})
+    static updateCellInfoCode(editorState: EditorState, cellInfo: CellInfo, from: number, to:number, fromLine: number, toLine:number, docCode: string, docVersion: number) {
+        return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine,docCode,docVersion})
     }
 
     /** This function creates a remapped cell info for when only the position changes */
-    static remapCellInfo(cellInfo: CellInfo, from: number,to: number, fromLine: number, toLine:number) {
-        return new CellInfo(cellInfo,{from,to,fromLine,toLine})
+    static remapCellInfo(editorState: EditorState, cellInfo: CellInfo, from: number,to: number, fromLine: number, toLine:number) {
+        return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine})
     }
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
-    static updateCellInfoDisplay(cellInfo: CellInfo, 
+    static updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
         {cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, outputVersion, inputVersion}: DisplayStateParams) {
         
         //output version required if evalStarted or evalCompleted is set
         
         if(cellEvalStarted === true) {
             //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
-            cellInfo = new CellInfo(cellInfo,{status: "value pending", consoleLines: [], plots: [], values: []})
+            cellInfo = new CellInfo(editorState,cellInfo,{consoleLines: [], plots: [], values: []})
         }
 
         let params: CellInfoParams = {}
@@ -263,20 +273,15 @@ export default class CellInfo {
         params.outputVersion = outputVersion
         params.inputVersion = inputVersion
 
-        if(cellEvalCompleted === true) {
-            params.status = "code clean"
-        }
-
-        return new CellInfo(cellInfo,params)
+        return new CellInfo(editorState,cellInfo,params)
     }
 
     /** This function creates a update cell info for when session commands are sent (to craete or update the cell) */
-    static updateCellInfoForCommand(cellInfo: CellInfo, currentDocVersion: number): CellInfo {
-        let status = "code pending"
+    static updateCellInfoForCommand(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
         let modelCode = cellInfo.docCode
         let modelVersion = cellInfo.docVersion
         let inputVersion = currentDocVersion
-        return new CellInfo(cellInfo,{status,modelCode,modelVersion,inputVersion})
+        return new CellInfo(editorState,cellInfo,{status,modelCode,modelVersion,inputVersion})
     }
 
     //for now we make a dummy id here

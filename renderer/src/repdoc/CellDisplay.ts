@@ -83,7 +83,8 @@ export default class CellDisplay extends WidgetType {
         if((this.element !== null)&&(this.activeStatus != this.cellInfo.status)) {
             this.activeStatus = this.cellInfo.status
             let backgroundColor = this.activeStatus == "code dirty" ? "beige" :
-                                    this.activeStatus == "code clean" ? "#F0F0F8" : "#B0B0B0"
+                                    this.activeStatus == "value pending" ? "#808080" : "#F0F0F8"
+                                     
             this.element!.style.backgroundColor = backgroundColor
         }
     }

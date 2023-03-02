@@ -17,8 +17,8 @@ const baseTheme = EditorView.baseTheme({
     "&dark .cm-rd-wrnText": {color: "orange", fontWeight: "bold"},
     "&dark .cm-rd-msgText": {color: "lightblue"},
 
-    "&light .cm-rd-codeDirtyShade": {backgroundColor: "rgba(200,226,255,0.5)"},
-    "&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(234,234,234,0.5)"},
+    "&light .cm-rd-codeDirtyShade": {backgroundColor: "rgba(145,200,255,0.5)"},
+    "&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(180,180,180,0.5)"},
     "&dark .cm-rd-codeDirtyShade": {backgroundColor: "rgba(52,26,0,0.5)"},
     "&dark .cm-rd-valuePendingShade": {backgroundColor: "rgba(31,31,31,0.5)"}
   })
@@ -167,6 +167,7 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
 
     let effects: readonly StateEffect<any>[] = transaction.effects
 
+
     for(let i1 = 0; i1 < effects.length; i1++) {
         let effect = effects[i1]
         if(effect.is(sessionOutputEffect)) { 
@@ -178,7 +179,7 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                 if(sessionOutputData.lineId !== null) {
                     let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
                     if(index >= 0) {
-                        newCellInfos[index] = CellInfo.updateCellInfoDisplay(newCellInfos[index], sessionOutputData.data)
+                        newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data)
 
                         //THIS ONLY WORKS IF WE ONLY GET ONE MESSAGE LIKE THIS
                         //update the input version for all values past this cell
@@ -188,7 +189,7 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                             let needsEval = sessionOutputData.data.nextLineIndex - 1 //NOTE - rturn value is 1 based index!!!
                             for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
                                 let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
-                                newCellInfos[i3] = CellInfo.updateCellInfoDisplay(newCellInfos[i3],{inputVersion,outputVersion})
+                                newCellInfos[i3] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[i3],{inputVersion,outputVersion})
                             }
                         }
 
@@ -249,9 +250,9 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
     if( (transaction && transaction.docChanged) || doParseTreeProcess ) {
         let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION 
         let {cellUpdateInfos,cellsToDelete,hasParseErrors,nonCommandIndex,parseTreeUsed} = getCellUpdateInfo(editorState,transaction,docState,doParseTreeProcess)
-        let cellInfos = createCellInfos(cellUpdateInfos,docVersion)
+        let cellInfos = createCellInfos(editorState,cellUpdateInfos,docVersion)
         if( nonCommandIndex > 0 || cellsToDelete!.length > 0 ) {
-            cellInfos = issueSessionCommands(cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+            cellInfos = issueSessionCommands(editorState,cellInfos,cellsToDelete,docVersion,nonCommandIndex)
         }
         return createDocState(cellInfos,docVersion,parseTreeUsed,hasParseErrors)
     }
@@ -406,18 +407,18 @@ function actionIsAnEdit(action: Action) {
 }
 
 /** This function creates a CellInfo object from a CellUpdateInfo. */
-function createCellInfos(cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
+function createCellInfos(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
 
     return cellUpdateInfos.map( cui => {
         switch(cui.action) {
             case Action.create: 
-                return CellInfo.newCellInfo(cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
+                return CellInfo.newCellInfo(editorState,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
 
             case Action.update: 
-                return CellInfo.updateCellInfoCode(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
+                return CellInfo.updateCellInfoCode(editorState,cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
 
             case Action.remap: 
-                return CellInfo.remapCellInfo(cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!)
+                return CellInfo.remapCellInfo(editorState,cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!)
 
             case Action.reuse: 
                 return  cui.cellInfo!
@@ -729,7 +730,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
 //--------------------------
 
 /** This method issues any needed session commands from the current state. */
-function issueSessionCommands(activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
+function issueSessionCommands(editorState: EditorState, activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
     let commands:CodeCommand[] = []
     let updatedCellInfos: CellInfo[] = []
 
@@ -742,7 +743,7 @@ function issueSessionCommands(activeCellInfos: CellInfo[], cellInfosToDelete: Ce
     //for(let index = 0; index < nonCommandIndex; index++) {
     activeCellInfos.forEach( (cellInfo,index) => {
         if( cellInfo.status == "code dirty" && index < nonCommandIndex ) {
-            let {newCellInfo,command} = createAddUpdateAction(cellInfo,index,docVersion)
+            let {newCellInfo,command} = createAddUpdateAction(editorState,cellInfo,index,docVersion)
             updatedCellInfos.push(newCellInfo)
             commands.push(command) 
         }
@@ -772,7 +773,7 @@ function createDeleteAction(cellInfo: CellInfo) {
 
 /** This function creates an add or update command for the cell Info and returns
  * the updated cell infos associated with sending the command. */
-function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number, docVersion: number) {
+function createAddUpdateAction(editorState: EditorState, cellInfo: CellInfo, zeroBasedIndex: number, docVersion: number) {
     let command: CodeCommand = {
         type: "",
         lineId: cellInfo.id,
@@ -787,7 +788,7 @@ function createAddUpdateAction(cellInfo: CellInfo, zeroBasedIndex: number, docVe
         command.type = "update"
     }
 
-    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(cellInfo, docVersion)
+    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(editorState,cellInfo, docVersion)
 
     return {command,newCellInfo}
 }
