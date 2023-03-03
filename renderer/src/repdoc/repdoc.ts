@@ -545,7 +545,7 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
 }
 
 function canDelete(cellUpdateInfo: CellUpdateInfo) {
-    return ( cellUpdateInfo.cellInfo !== null && !cellUpdateInfo.cellInfo!.needsCreate() )
+    return ( cellUpdateInfo.cellInfo !== undefined && !cellUpdateInfo.cellInfo!.needsCreate() )
 }
 
 function getReuseUpdateInfo(cellInfo: CellInfo) {
@@ -623,7 +623,7 @@ function getStartGapUpdate(firstMissingLine: number, cellUpdateInfo: CellUpdateI
         //gap
         let startLine = firstMissingLine
         let startPos = docText.line(startLine).from
-        let endLine = getCUIToLine(cellUpdateInfo) - 1
+        let endLine = getCUIFromLine(cellUpdateInfo) - 1
         let endPos = docText.line(endLine).to
         return getNewUpdateInfo(startPos,startLine,endPos,endLine,docText)
     } 
