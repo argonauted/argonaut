@@ -2,7 +2,7 @@
   "compilerOptions": {
     "lib": ["es2016", "dom", "scripthost"],
     "stripInternal": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
     "strict": true,
     "target": "es2016",
     "module": "es2020",

@@ -169,7 +169,7 @@ export default class CellInfo {
                 }) 
                 this.pOutputDisplay = this.outputDisplay!.range(this.to) 
             }
-            else {
+            else if(refCellInfo !== undefined) {
                 this.outputDisplay = refCellInfo!.outputDisplay
                 if((this.outputDisplay !== null)&&(this.to != refCellInfo!.to)) this.pOutputDisplay = this.outputDisplay!.range(this.to) 
                 else this.pOutputDisplay = refCellInfo!.pOutputDisplay
@@ -178,22 +178,21 @@ export default class CellInfo {
 
         //load line shading
         let setLineShading = false
-        if(statusChanged) {
-            let className: string | null = this.getLineShadingClass()
+        if( statusChanged ) {
+            let className = this.getLineShadingClass()
             if(className !== null) {
                 this.lineShading = Decoration.line({attributes: {class: className}})
                 setLineShading = true
             }
         }
-        else {
-            this.lineShading = refCellInfo!.lineShading
-            if((this.lineShading !== null)&&(this.from != refCellInfo!.from)) {
-                setLineShading = true 
+        else if(refCellInfo !== null) {
+            if( this.from != refCellInfo!.from || this.docCode != refCellInfo!.docCode ) {
+                this.lineShading = refCellInfo!.lineShading
+                if(this.lineShading !== null) setLineShading = true
             }
             else {
                 this.pLineShadings = refCellInfo!.pLineShadings
             }
-            
         }
 
         if(setLineShading) {
@@ -214,6 +213,10 @@ export default class CellInfo {
 
     needsCreate() {
         return (this.modelCode == null)
+    }
+
+    canDelete() {
+        return (this.modelCode != null)
     }
 
     //=================================

@@ -78,8 +78,8 @@ let cmdDisabledReason = "Init not yet completed!"
 let cmdTimeoutHandle: NodeJS.Timeout | null = null
 //let cmdTimeoutHandle: Timer | null = null
 
-let maxEvalLine: number | null = null  //add notation for whether this is 1 based or 0 based!!!
-let pendingLineIndex: number | null = null
+let maxEvalLine1: number | null = null  //add notation for whether this is 1 based or 0 based!!!
+let pendingLineIndex1: number | null = null
 let pendingEvalSession: string | null = null //when I have mutliple sessions, I will need to make a map of pending lines
 
 //===========================
@@ -121,16 +121,16 @@ export function randomIdString() {
     return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
 }
 
-export function setMaxEvalLine(maxLine: number) {
-    maxEvalLine = maxLine
+export function setMaxEvalLine1(maxLine1: number) {
+    maxEvalLine1 = maxLine1
     if(sessionEvaluateNeeded()) {
         if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
         evaluateSessionUpdateImpl(pendingEvalSession)
     }
 }
 
-export function clearMaxEvalLine() {
-    maxEvalLine = null
+export function clearMaxEvalLine1() {
+    maxEvalLine1 = null
     if(sessionEvaluateNeeded()) {
         if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
         evaluateSessionUpdateImpl(pendingEvalSession)
@@ -236,11 +236,11 @@ function sendSessionCommandImpl(docSessionId: string, rCode: string) {
 
 function sessionCommandCompleted(statusJson: any) {
     if(statusJson.data.evalComplete) {
-        pendingLineIndex = null
+        pendingLineIndex1 = null
         pendingEvalSession = null
     }
     else {
-        pendingLineIndex = statusJson.data.nextLineIndex
+        pendingLineIndex1 = statusJson.data.nextLineIndex
         pendingEvalSession = statusJson.session
     }
 
@@ -263,7 +263,7 @@ function sessionCommandCompleted(statusJson: any) {
 }
 
 function sessionEvaluateNeeded() {
-    return pendingLineIndex !== null && (maxEvalLine == null || maxEvalLine! > pendingLineIndex!)
+    return pendingLineIndex1 !== null && (maxEvalLine1 == null || maxEvalLine1! > pendingLineIndex1!)
 }
 
 function sessionCommandSendFailed(e: any) {

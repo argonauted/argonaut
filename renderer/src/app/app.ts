@@ -38,7 +38,7 @@ function startEditor() {
 
 function buildUi() {
   view = new EditorView({
-    doc: 'set.seed(234)',
+    doc: '234',
     extensions: [
       setup,
       //images(), //ignore the name - this does a console log printout of the parse tree
