@@ -224,6 +224,8 @@ export default class CellInfo {
     //=================================
 
     private getLineShadingClass() {
+        //if(this.docCode == "") return null
+
         switch(this.status) {
             case "code dirty":
                 return "cm-rd-codeDirtyShade"

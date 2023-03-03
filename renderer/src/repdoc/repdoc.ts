@@ -91,6 +91,12 @@ function getCUIToLine(cui: CellUpdateInfo) {
     else throw new Error("Unexpected: position not found in cell update info")
 }
 
+function getCUICodeText(cui: CellUpdateInfo) {
+    if(cui.codeText !== undefined) return cui.codeText
+    else if(cui.cellInfo !== undefined) return cui.cellInfo!.docCode
+    else throw new Error("Unexpected: code text not found in cell update info")
+}
+
 //==============================
 // Sesssion Event Processing
 //==============================
@@ -181,26 +187,16 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                     if(index >= 0) {
                         newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data)
 
-                        //THIS ONLY WORKS IF WE ONLY GET ONE MESSAGE LIKE THIS
-                        //update the input version for all values past this cell
-                        //set the output version for the ones that do not need to be evaluted
-                        if(sessionOutputData.data.docEvalCompleted === false && sessionOutputData.data.nextLineIndex !== undefined ) {
-                            let inputVersion = sessionOutputData.data.outputVersion!
-                            let needsEval = sessionOutputData.data.nextLineIndex - 1 //NOTE - rturn value is 1 based index!!!
-                            for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
-                                let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
-                                newCellInfos[i3] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[i3],{inputVersion,outputVersion})
-                            }
+                        //THIS CODE ASSUMES WE WILL ONLY GET ONE UPDATE (change if we can get more)
+                        //update status of later cells
+                        let inputVersion = sessionOutputData.data.outputVersion!
+                        let needsEval = ( sessionOutputData.data.docEvalCompleted || sessionOutputData.data.nextLineIndex !== undefined ) ? 
+                            newCellInfos.length : 
+                            sessionOutputData.data.nextLineIndex! - 1 //NOTE - rturn value is 1 based index!!!
+                        for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
+                            let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
+                            newCellInfos[i3] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[i3],{inputVersion,outputVersion})
                         }
-
-                        //============================================================================
-                        //update when model code is set to doc code, on either eval start or end.
-
-                        //once other cells are marked as input pending,
-                        //clear cells following this one until:
-                        // - we reach the next id
-                        // - we reach a cell with an input version greater than this value version
-                        //===============================================================================
                     }
                     else {
                         console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
@@ -261,10 +257,13 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
         if(docState === undefined) throw new Error("Unexpected: doc state misssing") //this shouldn't happen
         if(docState.hasDirtyCells) {
             //CLEAN THIS UP!!! (lots of repeated code)
+            let activeLine = editorState.doc.lineAt(editorState.selection.main.head).number
+            let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
+            let nonCommandIndex = (activeCellInfo === undefined || activeCellInfo!.status != "code dirty") ? docState.cellInfos.length : 
+                (activeCellInfo.docCode === "") ? activeLine : 0
+            setMaxEvalLine1(nonCommandIndex) 
             let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION
-            let nonCommandIndex = docState.cellInfos.length
-            let cellsToDelete: CellInfo[] = []
-            let cellInfos = issueSessionCommands(editorState,docState.cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+            let cellInfos = issueSessionCommands(editorState,docState.cellInfos,[],docVersion,nonCommandIndex)
             docState = createDocState(cellInfos,docVersion,docState.parseTreeCurrent,docState.hasParseErrors) 
         }
         return docState!
@@ -570,15 +569,25 @@ function getEditedUpdateInfo(cellInfo: CellInfo, prevUpdateInfo: CellUpdateInfo 
         }
         else if(prevUpdateInfo.newToLine! >= modUpdateInfo.newFromLine) {
             //overlap
-            if(prevUpdateInfo.codeText!.length == 0) {
-                if(canDelete(prevUpdateInfo)) deletes.push(prevUpdateInfo.cellInfo!)
-                pendingUpdateInfo = modUpdateInfo
+            let processingDone = false
+            let prevCode = getCUICodeText(prevUpdateInfo)
+            let modCode = getCUICodeText(modUpdateInfo)
+            if(prevCode == modCode) {
+                //the cells occupy the same line(s)
+                if(prevUpdateInfo.cellInfo !== null && prevUpdateInfo.cellInfo?.docCode == modCode) {
+                    if(canDelete(modUpdateInfo)) deletes.push(modUpdateInfo.cellInfo!)
+                    pendingUpdateInfo = prevUpdateInfo
+                    processingDone = true
+                }
+                else if(modUpdateInfo.cellInfo !== null && modUpdateInfo.cellInfo?.docCode == modCode) {
+                    if(canDelete(prevUpdateInfo)) deletes.push(prevUpdateInfo.cellInfo!)
+                    pendingUpdateInfo = modUpdateInfo
+                    processingDone = true
+                }
             }
-            else if(modUpdateInfo.codeText!.length == 0) {
-                if(canDelete(modUpdateInfo)) deletes.push(modUpdateInfo.cellInfo!)
-                pendingUpdateInfo = prevUpdateInfo
-            }
-            else {
+
+            if(!processingDone) {
+                //if neight matches, we will just make a new one
                 let newUpdateInfo = getNewUpdateInfo(prevUpdateInfo!.newFrom!,prevUpdateInfo!.newFromLine,
                                                      modUpdateInfo!.newTo!,modUpdateInfo!.newToLine,
                                                      docText)
@@ -722,7 +731,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
                     let toPos = endLine.to
                     let fromLine = startLine.number
                     let toLine = endLine.number
-                    let codeText = editorState.doc.sliceString(fromPos,toPos)
+                    let codeText = editorState.doc.sliceString(fromPos,toPos).trim()
 
                     //record the current cell index
                     if(fromLine <= selectionLine && toLine >= selectionLine) {

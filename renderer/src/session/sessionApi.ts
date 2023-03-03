@@ -43,7 +43,7 @@ type SessionResponse = any
 
 type CommandQueueEntry = {
     f: any,
-    args: IArguments | any[]
+    args: any[]
 }
 //===========================
 // Fields
@@ -61,11 +61,14 @@ let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', p
 
 let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
 
-//let initComplete = false
 let eventIndex = 0
 
 let firstPass = true
 let continueEvents = true
+
+//when we have multiple session, we will need a lot of changes
+//for now, this is our only session
+let onlySessionId: string | null = null
 
 let activeSession: string | null = null
 let activeLineId: string | null = null
@@ -123,18 +126,12 @@ export function randomIdString() {
 
 export function setMaxEvalLine1(maxLine1: number) {
     maxEvalLine1 = maxLine1
-    if(sessionEvaluateNeeded()) {
-        if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
-        evaluateSessionUpdateImpl(pendingEvalSession)
-    }
+    requestEvaluateSessionCheck()
 }
 
 export function clearMaxEvalLine1() {
     maxEvalLine1 = null
-    if(sessionEvaluateNeeded()) {
-        if(pendingEvalSession === null) throw new Error("Unexpected: pending eval session null")
-        evaluateSessionUpdateImpl(pendingEvalSession)
-    }
+    requestEvaluateSessionCheck()
 }
 
 //---------------------------
@@ -150,11 +147,17 @@ export function clearMaxEvalLine1() {
 // - I have to manage fialed commands better generally
 
 export function initDoc(docSessionId: string) {
-    sendSessionCommand({f: initDocImpl, args: arguments})
+    if(onlySessionId !== null) {
+        alert("For now we only allow one document session!")
+    }
+    else {
+        onlySessionId = docSessionId
+        sendSessionCommand({f: initDocImpl, args: [docSessionId]})
+    }
 }
 
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
-    sendSessionCommand({f: evaluateSessionCmdsImpl, args: arguments})
+    sendSessionCommand({f: evaluateSessionCmdsImpl, args: [docSessionId, cmds, cmdIndex]})
 }
                 
 
@@ -192,21 +195,22 @@ function sendSessionCommand(cmdEntry: CommandQueueEntry) {
 }
 
 function sendCommandFromQueue() {
-    let cmdEntry = sessionCmdQueue.splice(0,1)[0]
+    let cmdEntry = sessionCmdQueue.shift()!
+    pendingCommand = cmdEntry
     cmdEntry.f.apply(null,cmdEntry.args)
 }
 
 function initDocImpl(docSessionId: string) {
     let rCmd = `initializeDocState("${docSessionId}")`
     activeSession = docSessionId
-    sendSessionCommandImpl(docSessionId,rCmd)
+    sendSessionCommandImpl(rCmd) //docSessionId is the command key for init cmd
 }
 
 function evaluateSessionCmdsImpl(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
     let childCmdStrings = cmds.map(cmdToCmdListString)
     let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
     let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
-    sendSessionCommandImpl(docSessionId,rCmd)
+    sendSessionCommandImpl(rCmd)
 }
 
 function cmdToCmdListString(cmd: CodeCommand) {
@@ -221,16 +225,17 @@ function cmdToCmdListString(cmd: CodeCommand) {
     return cmdListString
 }
 
-const EVALUATE_SESSION_COMMAND_ENTRY = {f:null, args: []}
+const EVALUATE_SESSION_COMMAND_ENTRY = {f:evaluateSessionUpdateImpl, args: []}
 const SESSION_CMD_TIMEOUT_MSEC = 60000
 
-function evaluateSessionUpdateImpl(docSessionId: string) {
+function evaluateSessionUpdateImpl() {
+    if(onlySessionId === null) throw new Error("Unepxected: session ID missing")
     pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY
-    sendSessionCommandImpl(docSessionId,`evaluate("${docSessionId}")`)
+    sendSessionCommandImpl(`evaluate("${onlySessionId!}")`)
 }
 
-function sendSessionCommandImpl(docSessionId: string, rCode: string) {
-    cmdTimeoutHandle = setInterval(sessionCommandTimeout,SESSION_CMD_TIMEOUT_MSEC)
+function sendSessionCommandImpl(rCode: string) {
+    cmdTimeoutHandle = setInterval(() => sessionCommandTimeout(),SESSION_CMD_TIMEOUT_MSEC)
     sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]},undefined,sessionCommandSendFailed)
 }
 
@@ -248,22 +253,30 @@ function sessionCommandCompleted(statusJson: any) {
         clearTimeout(cmdTimeoutHandle) 
         cmdTimeoutHandle = null
     }
+    setTimeout(cmdCompleted,0)
+}
+
+function cmdCompleted() {
+    pendingCommand = null
+    if(sessionCmdQueue.length > 0) {
+        sendCommandFromQueue() 
+    }
+    else if(sessionEvaluateNeeded()) {
+        evaluateSessionUpdateImpl()
+    }
+}
+
+function requestEvaluateSessionCheck() {
     setTimeout(() => {
-        if(sessionCmdQueue.length > 0) {
-            sendCommandFromQueue() 
-        }
-        else if(sessionEvaluateNeeded()) {
-            //more lines to evaluate
-            evaluateSessionUpdateImpl(statusJson.session)
-        }
-        else {
-            pendingCommand = null
+        //this code assumes pendingCommand will act in place of a evaluate command
+        if( !pendingCommand && sessionEvaluateNeeded() ) {
+            evaluateSessionUpdateImpl()
         }
     },0)
 }
 
 function sessionEvaluateNeeded() {
-    return pendingLineIndex1 !== null && (maxEvalLine1 == null || maxEvalLine1! > pendingLineIndex1!)
+    return pendingLineIndex1 !== null && (maxEvalLine1 == null || maxEvalLine1! >= pendingLineIndex1!)
 }
 
 function sessionCommandSendFailed(e: any) {
