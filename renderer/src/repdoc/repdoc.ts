@@ -255,7 +255,7 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
     }
     else {
         if(docState === undefined) throw new Error("Unexpected: doc state misssing") //this shouldn't happen
-        if(docState.hasDirtyCells) {
+        if(docState.hasDirtyCells && !docState.hasParseErrors) {
             //CLEAN THIS UP!!! (lots of repeated code)
             let activeLine = editorState.doc.lineAt(editorState.selection.main.head).number
             let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
@@ -384,9 +384,8 @@ function getProcessParseTree(editorState: EditorState, transaction: Transaction 
     else {
         //if there are no new edits
         //use the parse tree if the document is not current
-        //and there are no errors
-        //and there is no active eidt
-        if( !docState.parseTreeCurrent && !docState.hasParseErrors ) {
+        //and there is no active edit
+        if( !docState.parseTreeCurrent ) {
             let activeLine = editorState.doc.lineAt(editorState.selection.main.head).number
             let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
             return activeCellInfo === undefined || !isCellDirty(activeCellInfo)
