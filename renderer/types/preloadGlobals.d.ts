@@ -3,9 +3,15 @@ export interface IRSessionApi {
   getBinary: (fileName: string) => Promise<Object>
 }
 
-export interface IUtilApi {
-  getFilePath: (relPath: string) => Promise<string>
+export interface IOpenSaveApi {
+  saveFileAs: (data: string, filePath: string | undefined) => Promise<string>,
+  saveFile: (data: string, filePath: string) => Promise<string>,
+  openFile: () => Promise<{data: string, filePath: string} | null>
 }
+
+// export interface IUtilApi {
+//   getFilePath: (relPath: string) => Promise<string>
+// }
 
 // export interface IOpenSaveApi {
 //   loadConfig: (onOpen) => void
@@ -17,6 +23,6 @@ export interface IUtilApi {
 declare global {
   interface Window {
     rSessionApi: IRSessionApi,
-    // openSaveApi: IOpenSaveApi
+    openSaveApi: IOpenSaveApi
   }
 }

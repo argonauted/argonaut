@@ -29,6 +29,9 @@ export type SessionOutputEvent = {
     nextId?: string
 }
 
+export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
+                           null /* initComplete */
+  
 /** This is the format used in the sendCommand function for a RSession request. */
 type SessionRequestWrapper = {
     scope: string
@@ -107,7 +110,7 @@ export function stopSessionListener() {
 
 //CLIENT LISTENER
 
-export function addEventListener(eventName: string, callback: (eventName: string, data: any) => void ) {
+export function addEventListener(eventName: string, callback: (eventName: string, data: EventPayload) => void ) {
     let listenerList = listeners[eventName]
     if(listenerList === undefined) {
         listenerList = []

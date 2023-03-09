@@ -4,6 +4,7 @@ import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Transaction, Extension, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
+import { sessionOutputEffect } from "../editor/editor"
 
 //===================================
 // Theme
@@ -95,20 +96,6 @@ function getCUICodeText(cui: CellUpdateInfo) {
     if(cui.codeText !== undefined) return cui.codeText
     else if(cui.cellInfo !== undefined) return cui.cellInfo!.docCode
     else throw new Error("Unexpected: code text not found in cell update info")
-}
-
-//==============================
-// Sesssion Event Processing
-//==============================
-
-export const sessionOutputEffect = StateEffect.define<[SessionOutputEvent]>()
-
-/** This function dispatches a document transaction for the given session event. */
-export function sessionOutputToView(view: any, eventList: any) {
-    if(view !== null) {
-        let effects: StateEffect<any>[] = [sessionOutputEffect.of(eventList)]
-        view.dispatch({effects: effects})
-    }
 }
 
 //===============================

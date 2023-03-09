@@ -1,12 +1,12 @@
 import {app, BrowserWindow, dialog, ipcMain} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
+import {saveFileAs, saveFile, openFile} from './fileAccess'
 import path from 'path'
 
 let windows = []
 
 const APP_FILE = "./renderer/web/index.html"
-//const APP_FILE = "./renderer/web/editor.html"
 
 let rSession = new RSession()
 
@@ -78,7 +78,12 @@ app.on('ready', () => {
 
     ipcMain.handle('rsession:sendrpcrequest',sendRpcRequest)
     ipcMain.handle('ressions:getbinary',getBinary)
-    ipcMain.handle('utilapi:getfilepath',getFilePath)
+
+    ipcMain.handle('fileAccess:saveFileAs',saveFileAs)
+    ipcMain.handle('fileAccess:saveFile',saveFile)
+    ipcMain.handle('fileAccess:openFile',openFile)
+
+    //ipcMain.handle('utilapi:getfilepath',getFilePath)
 
     createWindow(APP_FILE)
 })
