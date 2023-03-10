@@ -46,7 +46,14 @@ type SessionResponse = any
 
 type CommandQueueEntry = {
     f: any,
+    session: string, 
     args: any[]
+}
+
+type SessionLineInfo = {
+    maxEvalLine1: number | null 
+    pendingLineIndex1: number | null
+    docSessionId: string 
 }
 //===========================
 // Fields
@@ -84,9 +91,15 @@ let cmdDisabledReason = "Init not yet completed!"
 let cmdTimeoutHandle: NodeJS.Timeout | null = null
 //let cmdTimeoutHandle: Timer | null = null
 
-let maxEvalLine1: number | null = null  //add notation for whether this is 1 based or 0 based!!!
-let pendingLineIndex1: number | null = null
-let pendingEvalSession: string | null = null //when I have mutliple sessions, I will need to make a map of pending lines
+let sessionLineInfoMap: Record<string,SessionLineInfo> = {}
+
+function addSessionLineInfo(docSessionId: string) {
+    sessionLineInfoMap[docSessionId] = {
+        docSessionId: docSessionId,
+        maxEvalLine1:  null,
+        pendingLineIndex1:  null
+    }
+}
 
 //===========================
 // Main Functions
@@ -127,14 +140,26 @@ export function randomIdString() {
     return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
 }
 
-export function setMaxEvalLine1(maxLine1: number) {
-    maxEvalLine1 = maxLine1
-    requestEvaluateSessionCheck()
+export function setMaxEvalLine1(docSessionId: string, maxLine1: number) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo !== undefined) {
+        sessionLineInfo.maxEvalLine1 = maxLine1
+        requestEvaluateSessionCheck(docSessionId)
+    }
+    else {
+        console.log("Trying to set max eval line on unknown session: " + docSessionId)
+    }
 }
 
-export function clearMaxEvalLine1() {
-    maxEvalLine1 = null
-    requestEvaluateSessionCheck()
+export function clearMaxEvalLine1(docSessionId: string) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo !== undefined) {
+        sessionLineInfo.maxEvalLine1 = null
+        requestEvaluateSessionCheck(docSessionId)
+    }
+    else {
+        console.log("Trying to clear max eval line on unknown session: " + docSessionId)
+    }
 }
 
 //---------------------------
@@ -150,17 +175,16 @@ export function clearMaxEvalLine1() {
 // - I have to manage fialed commands better generally
 
 export function initDoc(docSessionId: string) {
-    if(onlySessionId !== null) {
-        alert("For now we only allow one document session!")
-    }
-    else {
-        onlySessionId = docSessionId
-        sendSessionCommand({f: initDocImpl, args: [docSessionId]})
-    }
+    addSessionLineInfo(docSessionId)
+    sendSessionCommand({f: initDocImpl, session: docSessionId, args: [docSessionId]})
+}
+
+export function closeDoc(docSessionId: string) {
+    console.log("IMPLEMENT CLOSE DOC IN SessionApi!")
 }
 
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
-    sendSessionCommand({f: evaluateSessionCmdsImpl, args: [docSessionId, cmds, cmdIndex]})
+    sendSessionCommand({f: evaluateSessionCmdsImpl, session: docSessionId, args: [docSessionId, cmds, cmdIndex]})
 }
                 
 
@@ -228,13 +252,12 @@ function cmdToCmdListString(cmd: CodeCommand) {
     return cmdListString
 }
 
-const EVALUATE_SESSION_COMMAND_ENTRY = {f:evaluateSessionUpdateImpl, args: []}
+const EVALUATE_SESSION_COMMAND_ENTRY = {f:evaluateSessionUpdateImpl, session: "", args: []} //we don't set the args or session since this is not used
 const SESSION_CMD_TIMEOUT_MSEC = 60000
 
-function evaluateSessionUpdateImpl() {
-    if(onlySessionId === null) throw new Error("Unepxected: session ID missing")
+function evaluateSessionUpdateImpl(docSessionId: string) {
     pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY
-    sendSessionCommandImpl(`evaluate("${onlySessionId!}")`)
+    sendSessionCommandImpl(`evaluate("${docSessionId}")`)
 }
 
 function sendSessionCommandImpl(rCode: string) {
@@ -243,43 +266,78 @@ function sendSessionCommandImpl(rCode: string) {
 }
 
 function sessionCommandCompleted(statusJson: any) {
-    if(statusJson.data.evalComplete) {
-        pendingLineIndex1 = null
-        pendingEvalSession = null
+    let sessionLineInfo = sessionLineInfoMap[statusJson.session]
+    if(sessionLineInfo) {
+        if(statusJson.data.evalComplete) {
+            sessionLineInfo.pendingLineIndex1 = null
+        }
+        else {
+            sessionLineInfo.pendingLineIndex1 = statusJson.data.nextLineIndex
+        }
+
+        if(cmdTimeoutHandle !== null) {
+            clearTimeout(cmdTimeoutHandle) 
+            cmdTimeoutHandle = null
+        }
+        setTimeout(() => cmdCompleted(statusJson.session),0)
+    }
+}
+
+function cmdCompleted(docSessionId: string) {
+    pendingCommand = null
+    //complete evaluation for the current session if needed
+    if(sessionEvaluateNeeded(docSessionId)) {
+        if(isNextComdQueueForSession(docSessionId)) {
+            sendCommandFromQueue() //do a pending command instead of eval - only if next for now. TBR
+        }
+        else {
+            evaluateSessionUpdateImpl(docSessionId) //send evaluate
+        }
+    }
+    else if(sessionCmdQueue.length > 0) {
+        sendCommandFromQueue() //execute any queued command
     }
     else {
-        pendingLineIndex1 = statusJson.data.nextLineIndex
-        pendingEvalSession = statusJson.session
+        evaluateAnySessionUpdates() //execute any need eval (I don't think we should have them?)
     }
-
-    if(cmdTimeoutHandle !== null) {
-        clearTimeout(cmdTimeoutHandle) 
-        cmdTimeoutHandle = null
-    }
-    setTimeout(cmdCompleted,0)
 }
 
-function cmdCompleted() {
-    pendingCommand = null
+function isNextComdQueueForSession(docSessionId: string) {
     if(sessionCmdQueue.length > 0) {
-        sendCommandFromQueue() 
+        return (sessionCmdQueue[0].session == docSessionId)
     }
-    else if(sessionEvaluateNeeded()) {
-        evaluateSessionUpdateImpl()
+    else {
+        return false
     }
 }
 
-function requestEvaluateSessionCheck() {
+function requestEvaluateSessionCheck(docSessionId: string) {
     setTimeout(() => {
         //this code assumes pendingCommand will act in place of a evaluate command
-        if( !pendingCommand && sessionEvaluateNeeded() ) {
-            evaluateSessionUpdateImpl()
+        if( !pendingCommand && sessionEvaluateNeeded(docSessionId) ) {
+            evaluateSessionUpdateImpl(docSessionId)
         }
     },0)
 }
 
-function sessionEvaluateNeeded() {
-    return pendingLineIndex1 !== null && (maxEvalLine1 == null || maxEvalLine1! >= pendingLineIndex1!)
+function sessionEvaluateNeeded(docSessionId: string) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo) {
+        return ( sessionLineInfo.pendingLineIndex1 !== null && 
+            (sessionLineInfo.maxEvalLine1 == null || sessionLineInfo.maxEvalLine1! >= sessionLineInfo.pendingLineIndex1!) )
+    }
+    else {
+        return false
+    }
+}
+
+function evaluateAnySessionUpdates() {
+    for(let sessionId in sessionLineInfoMap) {
+        if(sessionEvaluateNeeded(sessionId)) {
+            evaluateSessionUpdateImpl(sessionId)
+            return
+        }
+    }
 }
 
 function sessionCommandSendFailed(e: any) {
@@ -394,6 +452,7 @@ function onConsoleOut(text: string) {
                         if((msgJson.session !== activeSession)&&(lineActive)) {
                             //FIGURE OUT WHAT TO DO HERE...
                             console.error("Session msg Event not equal to active session with line active")
+                            //ALSO, WHAT IF LINE IS NOT ACTIVE? I DON'T THINK WE EXPECT THAT EITHER
                         }
 
                         if(currentEvent === null) {
@@ -402,9 +461,6 @@ function onConsoleOut(text: string) {
                         }
                         currentEvent.data.cellEvalCompleted = true
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
-
-                        //LATER - we need to add next id/index to evaluate
-                        //ADDING THIS
                         currentEvent.data.docEvalCompleted = msgJson.data.evalComplete
                         if(!msgJson.data.evalComplete) {
                             currentEvent.data.nextLineIndex = msgJson.data.nextLineIndex

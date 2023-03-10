@@ -1,7 +1,8 @@
 import * as React from "react"
 import { renderAppElement, initUi } from "./appframe/appUi"
 import { DocSession, TabState, TabFunctions } from "./appTypes"
-import { getEditor, sessionOutputToView, getEditorText, destroyEditor } from "./editor/editor"
+import { getEditor, getEditorText, destroyEditor } from "./editor/editor"
+import { sessionOutputToView } from "./editor/sessionEvents"
 import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent,initDoc} from "./session/sessionApi"
 
 //=============================================

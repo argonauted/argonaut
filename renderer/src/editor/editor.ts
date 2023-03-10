@@ -1,6 +1,5 @@
 import { TabState } from "../appTypes"
-import { SessionOutputEvent, initDoc } from "../session/sessionApi"
-import { StateEffect } from '@codemirror/state'
+import { initDoc } from "../session/sessionApi"
 
 import {EditorView} from "@codemirror/view"
 
@@ -28,26 +27,12 @@ export function getEditor(tabState: TabState, data: string, element: HTMLDivElem
         extensions: [
             setup,
             //images(), //ignore the name - this does a console log printout of the parse tree
-            repdoc(),
+            repdoc({docSessionId: tabState.id}),
             EXAMPLE()
         ],
         parent: element
     })
     return editor
-}
-
-//==============================
-// Sesssion Event Processing
-//==============================
-
-export const sessionOutputEffect = StateEffect.define<[SessionOutputEvent]>()
-
-/** This function dispatches a document transaction for the given session event. */
-export function sessionOutputToView(view: any, eventList: any) {
-    if(view !== null) {
-        let effects: StateEffect<any>[] = [sessionOutputEffect.of(eventList)]
-        view.dispatch({effects: effects})
-    }
 }
 
 

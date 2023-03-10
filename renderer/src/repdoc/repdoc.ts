@@ -4,7 +4,8 @@ import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Transaction, Extension, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
-import { sessionOutputEffect } from "../editor/editor"
+import {Facet} from "@codemirror/state"
+import { sessionOutputEffect } from "../editor/sessionEvents"
 
 //===================================
 // Theme
@@ -98,12 +99,36 @@ function getCUICodeText(cui: CellUpdateInfo) {
     else throw new Error("Unexpected: code text not found in cell update info")
 }
 
+
+
+//===========================
+// Settings Facet
+//===========================
+
+//I don't quite know how this is supposed to work yet
+const idFacet = Facet.define<string, string>({
+    // combine: values => {
+    //     if (values.length == 1) return values[0]
+    //     else if (values.length > 1) throw new Error("Unexpected: multiple values for docSessionid!")
+    //     else return ""
+    // }
+})
+
+function getSessionId(editorState: EditorState) {
+    let values = editorState.facet(idFacet)
+    if(values.length > 0) {
+        return values[0]
+     }
+     else {
+        throw new Error("Unexpected: Doc session Id missing!")
+     }
+}
+
 //===============================
 // Repdoc Codemirror Extension
 //===============================
 
-const ReactiveCodeField = StateField.define<DocState>({
-
+const InteractiveCodeField = StateField.define<DocState>({
     create(editorState) {
         return processDocChanges(editorState)
     },
@@ -121,10 +146,11 @@ const ReactiveCodeField = StateField.define<DocState>({
 })
 
 /** This is the extension to interface with the reactive code model and display the output in the editor */
-export const repdoc = (): Extension => {
+export const repdoc = (options: {docSessionId: string}): Extension => {
     return [
         baseTheme,
-        ReactiveCodeField,
+        idFacet.of(options.docSessionId),
+        InteractiveCodeField
     ]
 }
 
@@ -227,16 +253,18 @@ function printNonLineOutput(sessionOutputData: any) {
 // Process Document Changes
 //--------------------------
 
+
 /** This method processes changes from the editor, returning an updated doc state. */
 function processDocChanges(editorState: EditorState, transaction: Transaction | undefined = undefined, docState: DocState | undefined = undefined) {
+    let docSessionId = getSessionId(editorState)
     let doParseTreeProcess = getProcessParseTree(editorState, transaction, docState) 
     if( (transaction && transaction.docChanged) || doParseTreeProcess ) {
         let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION 
         let {cellUpdateInfos,cellsToDelete,hasParseErrors,nonCommandIndex,parseTreeUsed} = getCellUpdateInfo(editorState,transaction,docState,doParseTreeProcess)
         let cellInfos = createCellInfos(editorState,cellUpdateInfos,docVersion)
-        setMaxEvalLine1(nonCommandIndex) //note - argument here equals to the last commandIndex - 1, but it is also 1-based rather than 0-based
+        setMaxEvalLine1(docSessionId,nonCommandIndex) //note - argument here equals to the last commandIndex - 1, but it is also 1-based rather than 0-based
         if( nonCommandIndex > 0 || cellsToDelete!.length > 0 ) {
-            cellInfos = issueSessionCommands(editorState,cellInfos,cellsToDelete,docVersion,nonCommandIndex)
+            cellInfos = issueSessionCommands(docSessionId, editorState,cellInfos,cellsToDelete,docVersion,nonCommandIndex)
         }
         return createDocState(cellInfos,docVersion,parseTreeUsed,hasParseErrors)
     }
@@ -248,9 +276,9 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
             let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
             let nonCommandIndex = (activeCellInfo === undefined || activeCellInfo!.status != "code dirty") ? docState.cellInfos.length : 
                 (activeCellInfo.docCode === "") ? activeLine : 0
-            setMaxEvalLine1(nonCommandIndex) 
+            setMaxEvalLine1(docSessionId, nonCommandIndex) 
             let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION
-            let cellInfos = issueSessionCommands(editorState,docState.cellInfos,[],docVersion,nonCommandIndex)
+            let cellInfos = issueSessionCommands(docSessionId, editorState,docState.cellInfos,[],docVersion,nonCommandIndex)
             docState = createDocState(cellInfos,docVersion,docState.parseTreeCurrent,docState.hasParseErrors) 
         }
         return docState!
@@ -837,7 +865,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
 //--------------------------
 
 /** This method issues any needed session commands from the current state. */
-function issueSessionCommands(editorState: EditorState, activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
+function issueSessionCommands(docSessionId: string, editorState: EditorState, activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
     let commands:CodeCommand[] = []
     let updatedCellInfos: CellInfo[] = []
 
@@ -861,7 +889,7 @@ function issueSessionCommands(editorState: EditorState, activeCellInfos: CellInf
 
     //send commands
     if(commands.length > 0) {
-        sendCommands(commands,docVersion)
+        sendCommands(docSessionId, commands,docVersion)
     }
 
     //return modified cell infos
@@ -901,9 +929,9 @@ function createAddUpdateAction(editorState: EditorState, cellInfo: CellInfo, zer
 }
 
 /** This function sends a list of commands. */
-function sendCommands(commands: CodeCommand[],docVersion: number) {
+function sendCommands(docSessionId: string, commands: CodeCommand[],docVersion: number) {
     //console.log("Commands to send:")
     //console.log(JSON.stringify(commands))
-    evaluateSessionCmds("ds1",commands,docVersion)
+    evaluateSessionCmds(docSessionId,commands,docVersion)
 }
 
