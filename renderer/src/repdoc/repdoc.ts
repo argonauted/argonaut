@@ -170,7 +170,7 @@ function createDocState(cellInfos: CellInfo[],docVersion: number,parseTreeUsed: 
         cellInfos: cellInfos,
         parseTreeCurrent: parseTreeUsed,
         hasParseErrors: hasParseErrors,
-        hasDirtyCells: cellInfos.some(cellInfo => isCellDirty(cellInfo) ),
+        hasDirtyCells: cellInfos.some(cellInfo => isCodeDirty(cellInfo) ),
         decorations: (decorations.length > 0) ? 
             RangeSet.of(decorations) : Decoration.none
     }
@@ -203,9 +203,9 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                         //THIS CODE ASSUMES WE WILL ONLY GET ONE UPDATE (change if we can get more)
                         //update status of later cells
                         let inputVersion = sessionOutputData.data.outputVersion!
-                        let needsEval = ( sessionOutputData.data.docEvalCompleted || sessionOutputData.data.nextLineIndex === undefined ) ? 
+                        let needsEval = ( sessionOutputData.data.docEvalCompleted || sessionOutputData.data.nextLineIndex1 === undefined ) ? 
                             newCellInfos.length : 
-                            sessionOutputData.data.nextLineIndex! - 1 //NOTE - rturn value is 1 based index!!!
+                            sessionOutputData.data.nextLineIndex1! - 1 //NOTE - rturn value is 1 based index!!!
                         for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
                             let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
                             newCellInfos[i3] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[i3],{inputVersion,outputVersion})
@@ -404,7 +404,7 @@ function getProcessParseTree(editorState: EditorState, transaction: Transaction 
         if( !docState.parseTreeCurrent ) {
             let activeLine = editorState.doc.lineAt(editorState.selection.main.head).number
             let activeCellInfo = docState.cellInfos.find( cellInfo => cellInfo.fromLine >= activeLine && cellInfo.toLine <= activeLine )
-            return activeCellInfo === undefined || !isCellDirty(activeCellInfo)
+            return activeCellInfo === undefined || !isCodeDirty(activeCellInfo)
         }
         else return false
     }
@@ -417,8 +417,8 @@ function textAdded(changes: ChangeSet) {
     return textAdded
 }
 
-function isCellDirty(cellInfo: CellInfo) {
-    return ( cellInfo.status == "code dirty" || cellInfo.status == "inputs dirty" )
+function isCodeDirty(cellInfo: CellInfo) {
+    return ( cellInfo.status == "code dirty" )
 }
 
 function isEmptyCell(nodeName: string) {
@@ -832,7 +832,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
     let activeEditType = ""
     if(activeCellIndex != INVALID_CELL_INDEX) {
         let cellUpdateInfo = newCellUpdateInfos[activeCellIndex] 
-        if( actionIsAnEdit(cellUpdateInfo.action) || (cellUpdateInfo.cellInfo !== undefined && isCellDirty(cellUpdateInfo.cellInfo!)) ) {
+        if( actionIsAnEdit(cellUpdateInfo.action) || (cellUpdateInfo.cellInfo !== undefined && isCodeDirty(cellUpdateInfo.cellInfo!)) ) {
             activeEditIndex = activeCellIndex
             activeEditType = activeCellType
         }
@@ -878,7 +878,7 @@ function issueSessionCommands(docSessionId: string, editorState: EditorState, ac
     //send create/update commands for any cell with code dirty beneat the non-command index
     //for(let index = 0; index < nonCommandIndex; index++) {
     activeCellInfos.forEach( (cellInfo,index) => {
-        if( isCellDirty(cellInfo) && index < nonCommandIndex ) {
+        if( isCodeDirty(cellInfo) && index < nonCommandIndex ) {
             let {newCellInfo,command} = createAddUpdateAction(editorState,cellInfo,index,docVersion)
             updatedCellInfos.push(newCellInfo)
             commands.push(command) 

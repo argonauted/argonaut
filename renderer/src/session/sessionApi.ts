@@ -24,7 +24,7 @@ export type SessionOutputEvent = {
         cellEvalCompleted?: boolean
         outputVersion?: number
         docEvalCompleted?: boolean
-        nextLineIndex?: number
+        nextLineIndex1?: number
     },
     nextId?: string
 }
@@ -76,10 +76,6 @@ let eventIndex = 0
 let firstPass = true
 let continueEvents = true
 
-//when we have multiple session, we will need a lot of changes
-//for now, this is our only session
-let onlySessionId: string | null = null
-
 let activeSession: string | null = null
 let activeLineId: string | null = null
 let lineActive: boolean = false
@@ -109,11 +105,8 @@ function addSessionLineInfo(docSessionId: string) {
 
 export function startSessionListener() {   
     if(firstPass) {
-        //send a dummy command
-        sendCommand(DUMMY_CMD)
+        sendCommand(DUMMY_CMD) //send a dummy command - does this do anything?
     }
-
-    //start event listener
     listenForEvents()
 }
 
@@ -210,6 +203,7 @@ function sendSessionCommand(cmdEntry: CommandQueueEntry) {
     if(cmdDisabled) {
         //FIGURE OUT STANDARD ERROR HANDLING
         alert("Error! A command could not be sent: " + cmdDisabledReason)
+        return
     }
 
     if(pendingCommand !== null) {
@@ -261,7 +255,7 @@ function evaluateSessionUpdateImpl(docSessionId: string) {
 }
 
 function sendSessionCommandImpl(rCode: string) {
-    cmdTimeoutHandle = setInterval(() => sessionCommandTimeout(),SESSION_CMD_TIMEOUT_MSEC)
+    cmdTimeoutHandle = setInterval(sessionCommandTimeout,SESSION_CMD_TIMEOUT_MSEC)
     sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]},undefined,sessionCommandSendFailed)
 }
 
@@ -428,6 +422,9 @@ function onConsoleOut(text: string) {
                         activeLineId = msgJson.data.lineId
                         lineActive = true
         
+                        //I ASSUME CURRENT EVENT NOT SET. IS THAT OK?
+                        if(currentEvent !== null) throw new Error("Unepxected: start eval not first message in a console out")
+
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
                         currentEvent.data.cellEvalStarted = true
@@ -453,6 +450,8 @@ function onConsoleOut(text: string) {
                             //FIGURE OUT WHAT TO DO HERE...
                             console.error("Session msg Event not equal to active session with line active")
                             //ALSO, WHAT IF LINE IS NOT ACTIVE? I DON'T THINK WE EXPECT THAT EITHER
+                            //I think we check if line is active because then the activeSession is valid? But if we get a docStatue
+                            //with no active session, what does that mean?
                         }
 
                         if(currentEvent === null) {
@@ -463,7 +462,7 @@ function onConsoleOut(text: string) {
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
                         currentEvent.data.docEvalCompleted = msgJson.data.evalComplete
                         if(!msgJson.data.evalComplete) {
-                            currentEvent.data.nextLineIndex = msgJson.data.nextLineIndex
+                            currentEvent.data.nextLineIndex1 = msgJson.data.nextLineIndex
                         }
 
                         lineActive = false
