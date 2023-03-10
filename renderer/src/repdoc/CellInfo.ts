@@ -150,9 +150,10 @@ export default class CellInfo {
         }
 
         //determine the status
-        if(this.docVersion > this.modelVersion) this.status = "code dirty"
-        else if(this.modelVersion > this.outputVersion || this.inputVersion > this.outputVersion) this.status = "value pending"
-        else this.status = "code clean"
+        if( this.docVersion > this.modelVersion ) this.status = "code dirty"
+        else if( this.inputVersion > this.outputVersion ) this.status = "inputs dirty"
+        else if( this.modelVersion > this.outputVersion ) this.status = "value pending"
+        else this.status = "value clean"
         let statusChanged = (refCellInfo !== null) ? (this.status != refCellInfo!.status) : true
         if(statusChanged) displayChanged = true
 
@@ -186,8 +187,8 @@ export default class CellInfo {
             }
         }
         else if(refCellInfo !== null) {
+            this.lineShading = refCellInfo!.lineShading
             if( this.from != refCellInfo!.from || this.docCode != refCellInfo!.docCode ) {
-                this.lineShading = refCellInfo!.lineShading
                 if(this.lineShading !== null) setLineShading = true
             }
             else {
@@ -224,18 +225,15 @@ export default class CellInfo {
     //=================================
 
     private getLineShadingClass() {
-        //if(this.docCode == "") return null
-
-        switch(this.status) {
-            case "code dirty":
-                return "cm-rd-codeDirtyShade"
-
-            case "value pending":
-                return "cm-rd-valuePendingShade"
-
-            default:
-                return null;
-            
+        if(this.status == "code dirty") {
+            return "cm-rd-codeDirtyShade"
+        }
+        else if(this.status == "value clean" || this.docCode == "") {
+            return null
+        }
+        else {
+            //non-empty "value pending" or "inputs dirty"
+            return "cm-rd-valuePendingShade"
         }
     }
 
