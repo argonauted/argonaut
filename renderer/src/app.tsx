@@ -193,7 +193,7 @@ function EditorFrame({tabState}:{tabState: TabState}) {
 
         }
     },[])
-    return <div ref={tabRef}></div>
+    return <div className="app-editor-container" ref={tabRef}></div>
 }
 
 function renderApp() {

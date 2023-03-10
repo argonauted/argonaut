@@ -28,6 +28,14 @@ body {
     display:flex;
     flex-direction:column;
 }
+.app-editor-container {
+    position:absolute;
+    left:0;
+    right:0;
+    top:0;
+    bottom:0;
+    overflow: auto;
+}
 
 /***************** SelectMenu  ****************/
 .selectMenu_wrapper {
