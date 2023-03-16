@@ -95,8 +95,8 @@ BinaryExpr {
     expression !rassign AssignOp< "->" | "->>" > newline* expression |
     expression !eqassign equalsAssignOp newline* expression |
     expression !frmla GenOp< "~" > newline* expression | 
-    expression !compon GenOp< "$" | "@" > newline* ( Identifier | Character ) |
-    Identifier !member GenOp< "::" | ":::" > newline* Identifier
+    expression !compon MemberOp< "$" | "@" > newline* ( Identifier | Character ) |
+    Identifier !member MemberOp< "::" | ":::" > newline* Identifier
 }
 
 ArithOp<op> { op }
@@ -105,6 +105,7 @@ LogicOp<op> { op }
 AssignOp<op> { op }
 equalsAssignOp[@name="AssignOp"] { equalSign }
 GenOp<op> { op }
+MemberOp<op> { op }
 
 ifExpr { ifKwd newline* openParen newline* expression newline* closeParen newline* expression ifEnding }
 

@@ -4,9 +4,11 @@ import { initDoc } from "../session/sessionApi"
 import {EditorView} from "@codemirror/view"
 
 import {setup} from "./setup"
-import {EXAMPLE} from "../../argonaut-lezer-r/src"
+import {rlang} from "../../argonaut-lezer-r/src"
 
 import { repdoc } from "../repdoc/repdoc"
+import { acTest1 } from "./autocomplete/acTest1"
+import { acTest2 } from "./autocomplete/acTest2"
 
 import { Editor } from "../appTypes"
 
@@ -28,7 +30,7 @@ export function getEditor(tabState: TabState, data: string, element: HTMLDivElem
             setup,
             //images(), //ignore the name - this does a console log printout of the parse tree
             repdoc({docSessionId: tabState.id}),
-            EXAMPLE()
+            rlang({autocomplete: [acTest1,acTest2]})
         ],
         parent: element
     })
