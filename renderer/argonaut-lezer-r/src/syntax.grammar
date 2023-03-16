@@ -185,7 +185,8 @@ infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | inf
   Complex { number "i" }
 
   simpleName {
-    ( identifierChar | "." ) ( ( identifierChar | "." | "_" ) ( identifierChar | @digit | "." | "_" )* )?
+    ( identifierChar ) ( identifierChar | @digit | "." | "_" )*  | 
+    ( "." ) ( ( identifierChar | "." | "_" ) ( identifierChar | @digit | "." | "_" )* )?
   }
 
   backtickName { "`" ![\n]* "`" }
