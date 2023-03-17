@@ -186,8 +186,13 @@ export function setActiveCell(docSessionId: string, prevLineId: string, force = 
     }
 }
 
-export function getAutocomplete(docSessionId: string, prevLineId: string, expressionText: string, expressionLine: string) {
-    if(activeSession != docSessionId || activeLineId != prevLineId) return null
+export function getAutocomplete(docSessionId: string, prevLineId: string | null, expressionText: string, expressionLine: string) {
+    if(prevLineId === null) {
+        console.log("AUTOCOMPLETE DOESN'T WORK ON FIRST LINE FOR NOW! FIX THAT!")
+        return Promise.resolve(null)
+    }
+
+    if(activeSession != docSessionId || activeLineId != prevLineId) return Promise.resolve(null)
     
     let cmd: SessionRequestWrapper = {
         scope: 'rpc',

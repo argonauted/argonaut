@@ -37,9 +37,8 @@ export const RLanguage = LRLanguage.define({
   }
 })
 
-export function rlang(config: {autocomplete?: any[]} = {}) {
-  let langConfig = config.autocomplete !== undefined ? config.autocomplete.map(acext => RLanguage.data.of({autocomplete: acext})) : []
-  return new LanguageSupport(RLanguage,langConfig)
+export function rlangsupport() {
+  return new LanguageSupport(RLanguage)
 }
 
 

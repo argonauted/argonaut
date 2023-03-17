@@ -24,6 +24,9 @@ export function acTest2(context: CompletionContext) {
             let cellNode = getCellNode(grandParentNode)
             if(cellNode !== null) {
               let lineText = context.state.doc.sliceString(cellNode.from,containingNode.to)
+
+              context.state.field()
+
               //check autocomplete here!
               return getAutocompleteResult(calleeText,lineText,containingNode.to)
             }
