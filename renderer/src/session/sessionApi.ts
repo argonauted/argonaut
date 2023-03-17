@@ -37,7 +37,6 @@ type SessionRequestWrapper = {
     scope: string
     method: string
     params: any[]
-    processResponse?: ((arg0: any) => void)
 }
 
 /** This is the format of a response from the RSession. */
@@ -179,6 +178,40 @@ export function closeDoc(docSessionId: string) {
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
     sendSessionCommand({f: evaluateSessionCmdsImpl, session: docSessionId, args: [docSessionId, cmds, cmdIndex]})
 }
+
+
+export function setActiveCell(docSessionId: string, prevLineId: string, force = false) {
+    if(activeSession != docSessionId || activeLineId != prevLineId || force) {
+        sendSessionCommand({f: setActiveCellImpl, session: docSessionId, args: [docSessionId, prevLineId]})
+    }
+}
+
+export function getAutocomplete(docSessionId: string, prevLineId: string, expressionText: string, expressionLine: string) {
+    if(activeSession != docSessionId || activeLineId != prevLineId) return null
+    
+    let cmd: SessionRequestWrapper = {
+        scope: 'rpc',
+        method: 'get_completions',
+        params: [
+            "",
+            [expressionText],
+            [6],
+            [0],
+            "",
+            "",
+            [],
+            [],
+            false,
+            "",
+            "",
+            expressionLine,
+            true
+        ]
+    }
+    return new Promise((resolve,reject) => {   
+        sendCommand(cmd,arg0 => resolve(arg0),arg0 => reject(arg0))
+    })
+}
                 
 
 //=================================
@@ -231,6 +264,11 @@ function evaluateSessionCmdsImpl(docSessionId: string, cmds: CodeCommand[], cmdI
     let childCmdStrings = cmds.map(cmdToCmdListString)
     let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
     let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
+    sendSessionCommandImpl(rCmd)
+}
+
+function setActiveCellImpl(docSessionId: string, prevLineId: string) {
+    let rCmd = `setActiveLine("${docSessionId},${prevLineId}")`
     sendSessionCommandImpl(rCmd)
 }
 
@@ -469,6 +507,15 @@ function onConsoleOut(text: string) {
                         currentEvent = null
                         break
                     }
+                    case "activeLineStatus": {
+                        if(lineActive) {
+                            //Doh! We don't want this to happen
+                            console.log("Warning! Active line status reset while line active!")
+                        }
+                        activeSession = msgJson.session
+                        activeLineId = msgJson.data.activeLineId
+                        break
+                    }
         
                     default:
                         console.error("Unknown message: " + JSON.stringify(msgJson,null,4))
@@ -491,7 +538,9 @@ function onConsoleOut(text: string) {
         }
     })
 
-    dispatch("sessionOutput",sessionOutputEvents)
+    if(sessionOutputEvents.length > 0) {
+        dispatch("sessionOutput",sessionOutputEvents)
+    }
 }
 
 function onConsoleErr(msg: string) {

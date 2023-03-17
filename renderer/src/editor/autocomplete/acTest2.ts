@@ -1,6 +1,7 @@
 import {syntaxTree} from "@codemirror/language"
 import {CompletionContext} from "@codemirror/autocomplete"
 import { SyntaxNode, NodeType } from "@lezer/common"
+import { getAutocomplete } from "../../session/sessionApi"
 
 // const tagOptions = [
 //   "constructor", "deprecated", "link", "param", "returns", "type"
@@ -45,8 +46,9 @@ export function acTest2(context: CompletionContext) {
   // }
 }
 
-function getAutocompleteResult(calleeText: string, lineText: string, memberStartPosition: number) {
+function getAutocompleteResult(/*docSessionId: string, prevLineId: string, */calleeText: string, lineText: string, memberStartPosition: number) {
   console.log(`Check autocomplete: callee: ${calleeText}, line: ${lineText}`)
+  //return getAutocomplete(docSessionId,prevLineId,calleeText,lineText).then(data => null)
   return Promise.resolve({
     from: memberStartPosition,
     options: [
