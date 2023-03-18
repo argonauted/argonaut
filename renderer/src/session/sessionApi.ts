@@ -300,6 +300,8 @@ function evaluateSessionUpdateImpl(docSessionId: string) {
 function sendSessionCommandImpl(rCode: string) {
     cmdTimeoutHandle = setInterval(sessionCommandTimeout,SESSION_CMD_TIMEOUT_MSEC)
     sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]},undefined,sessionCommandSendFailed)
+    //code to sent over consile input rather than execute code
+    //sendCommand({scope: 'rpc', method: 'console_input', params: [rCode,"",0]},undefined,sessionCommandSendFailed)
 }
 
 function sessionCommandCompleted(statusJson: any) {
