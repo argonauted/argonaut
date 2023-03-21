@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as ReactDom from "react-dom/client"
 import { MenuProps} from './SelectMenu'
-import { DocSession, TabState, TabFunctions } from '../appTypes'
+import { DocSession, TabState, AppFunctions } from '../appTypes'
 import { AppElement } from './AppElement'
 
 let appElement: HTMLElement | null = null
@@ -22,7 +22,7 @@ export function initUi() {
 export function renderAppElement(docSessions: Record<string,DocSession>, 
                                 activeDocSessionId: string | null, 
                                 menuList: MenuProps[], 
-                                tabFunctions: TabFunctions) {
+                                tabFunctions: AppFunctions) {
     if(root === null) return
 
     const tabStateArray = createTabStateArray(docSessions)

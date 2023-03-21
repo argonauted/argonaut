@@ -1,12 +1,6 @@
 import { StateField} from '@codemirror/state'
 import type { Extension } from '@codemirror/state'
-import { getSessionId } from './interactiveCode'
-
-let onDocChanged: (docSessionId: string) => void | undefined
-
-export function setDocChangedHandler(callback: (docSessionId: string) => void | undefined) {
-    onDocChanged = callback
-}
+import { getSessionId, getAppFunctions } from './editorConfig'
 
 //===============================
 // Repdoc Codemirror Extension
@@ -16,7 +10,8 @@ export const OnChangeField = StateField.define<void>({
     create(editorState) {},
     update(dummy, transaction) {
         if(transaction.docChanged) {
-            if(onDocChanged !== undefined) onDocChanged(getSessionId(transaction.state))
+            let appFunctions = getAppFunctions(transaction.state)
+            appFunctions.onDocChanged(getSessionId(transaction.state))
         }
     }
 })

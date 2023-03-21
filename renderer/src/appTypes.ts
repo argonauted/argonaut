@@ -31,8 +31,10 @@ export interface TabState {
     type: string
 }
 
-export interface TabFunctions {
+export interface AppFunctions {
     selectTab: (tabId: string) => void
     closeTab: (tabId: string) => void
-    getTabElement: (tabState: TabState, isShowing: boolean) => React.ReactNode
+    getTabElement: (tabState: TabState, tabFunctions: AppFunctions, isShowing: boolean) => React.ReactNode,
+    saveFile: (sessionId?: string, doSaveAs?: boolean) => void,
+    onDocChanged: (docSessionId: string) => void
 }

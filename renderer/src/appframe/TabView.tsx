@@ -1,22 +1,22 @@
 import * as React from 'react'
-import { TabState, TabFunctions } from '../appTypes'
+import { TabState, AppFunctions } from '../appTypes'
 
 export interface TabViewProps {
     selectedId: string  | null
     tabStateArray: TabState[]
-    tabFunctions: TabFunctions
+    tabFunctions: AppFunctions
 }
 
 export interface TabFrameProps {
     tabState: TabState
-    tabFunctions: TabFunctions
+    tabFunctions: AppFunctions
     showing: boolean
 }
 
 export interface TabTabProps {
     tabState: TabState
     isSelected: boolean
-    tabFunctions: TabFunctions
+    tabFunctions: AppFunctions
 }
 
 
@@ -76,7 +76,7 @@ function TabTab({tabState, isSelected, tabFunctions}: TabTabProps) {
 function TabFrame({tabState, tabFunctions, showing}: TabFrameProps) {
     return (
         <div style={{display: showing ? '' : "none"}} className="tabView_frame">
-            {tabFunctions.getTabElement(tabState,showing)}
+            {tabFunctions.getTabElement(tabState,tabFunctions,showing)}
         </div>
     )
 }

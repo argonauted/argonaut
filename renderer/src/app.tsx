@@ -1,8 +1,7 @@
 import * as React from "react"
 import { renderAppElement, initUi } from "./appframe/appUi"
-import { DocSession, DocSessionUpdate, TabState, TabFunctions } from "./appTypes"
+import { DocSession, DocSessionUpdate, TabState, AppFunctions } from "./appTypes"
 import { getEditor, getEditorText, destroyEditor } from "./editor/editor"
-import { setDocChangedHandler } from "./repdoc/docchangedextension"
 import { sessionOutputToView } from "./editor/sessionEvents"
 import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent,initDoc} from "./session/sessionApi"
 
@@ -97,10 +96,6 @@ function updateDocSession(oldDocSession: DocSession, docSessionUpdate: DocSessio
     }
 }
 
-//set doc changed handler
-setDocChangedHandler(onDocChanged)
-
-
 //==============================================
 // actions
 //==============================================
@@ -166,7 +161,7 @@ function newFile() {
 function openFile() {
     window.openSaveApi.openFile().then( (fileData: OpenFileData | null) => { 
         if(fileData !== null) {
-            let docSessionId = getSessionIdForFilePath(fileData.filePath!)
+            let docSessionId = lookupSessionIdForFilePath(fileData.filePath!)
             if(docSessionId !== null) {
                 //IMPROVE HANDLING OF TWO WINDOWS OPENED
                 const msg = "The file is already opened. The existing opened version will be used."
@@ -183,16 +178,20 @@ function openFile() {
     })
 }
 
-function saveFileAs() {
-    saveFile(true)
+function saveFileAs(sessionId: string | null = activeSessionId) {
+    saveFile(sessionId, true)
 }
 
-function saveFile(doSaveAs: boolean = false) {
-    if(activeSessionId === null) {
-        console.log("There is no active session")
+function saveFile(sessionId: string | null = activeSessionId, doSaveAs: boolean = false) {
+    if(sessionId === null) {
+        console.log("Save attempted with no session set")
         return
     }
-    let docSession = docSessions[activeSessionId]
+    let docSession = docSessions[sessionId]
+    if(docSession === undefined) {
+        console.log("Session object not found for save")
+        return
+    }
 
     //do I want this check?
     // if(!docSession.isDirty && !doSaveAs) {
@@ -212,8 +211,8 @@ function saveFile(doSaveAs: boolean = false) {
 
     savePromise.then( (fileData: SaveFileData | null) => { 
         if(fileData !== null) {
-            let docSessionId = getSessionIdForFilePath(fileData.filePath!)
-            if(docSessionId !== null) {
+            let otherDocSessionId = lookupSessionIdForFilePath(fileData.filePath!,docSession.id)
+            if(otherDocSessionId !== null) {
                 //IMPORVE HANDLING OF TWO WINDOWS OPENED
                 const msg = "There are two files opened with the same name. It is recommended you close one of them."
                 window.dialogApi.alertDialog(msg,"warning")
@@ -254,9 +253,9 @@ function createFileName(fileExtension: string) {
 
 /** This function checks the currently opend doc sessions to see if the given file path is already opened.
  * It returns the docSessionId or null. */
-function getSessionIdForFilePath(filePath: string) {
+function lookupSessionIdForFilePath(filePath: string, excludedId?: string) {
     for(let docSessionId in docSessions) {
-        if(docSessions[docSessionId].filePath == filePath) return docSessionId
+        if(docSessionId !== excludedId && docSessions[docSessionId].filePath == filePath) return docSessionId
     }
     return null
 }
@@ -266,12 +265,12 @@ function getSessionIdForFilePath(filePath: string) {
 //==============================================
 
 /** This is the lookup function to retrieve a tab element. */
-function getTabElement(tabState: TabState, isShowing: boolean) {
-    return <EditorFrame tabState={tabState} />
+function getTabElement(tabState: TabState, tabFunctions: AppFunctions, isShowing: boolean) {
+    return <EditorFrame tabState={tabState} tabFunctions={tabFunctions} />
 }
 
 /** This generates an editor tab object. */
-function EditorFrame({tabState}:{tabState: TabState}) {
+function EditorFrame({tabState, tabFunctions}:{tabState: TabState, tabFunctions: AppFunctions}) {
     let tabRef = React.useRef<HTMLDivElement>(null)
     React.useEffect(() => {
         //create editor - (non-react element)
@@ -279,7 +278,7 @@ function EditorFrame({tabState}:{tabState: TabState}) {
         let docSession = docSessions[tabState.id]
         if(element !== null && docSession !== undefined) {
             const data = docSession!.lastSavedText !== undefined ? docSession.lastSavedText! : ''
-            docSession.editor = getEditor(tabState,data,element)
+            docSession.editor = getEditor(tabState,tabFunctions,data,element)
             //destroy
             return () => {
                 if(docSession.editor) {
@@ -347,10 +346,12 @@ let menuListNoSave = [{
     ]
 }]
 
-const tabFunctions: TabFunctions = {
+const tabFunctions: AppFunctions = {
     selectTab: selectDocSession,
     closeTab: closeDocSession,
-    getTabElement: getTabElement
+    getTabElement: getTabElement,
+    saveFile: saveFile,
+    onDocChanged: onDocChanged
 }
 
 //===========================

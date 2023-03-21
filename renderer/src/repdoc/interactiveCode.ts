@@ -2,10 +2,10 @@ import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1} from
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
-import type { EditorState, Transaction, Extension, ChangeSet, Range, Text } from '@codemirror/state'
+import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
-import {Facet} from "@codemirror/state"
 import { sessionOutputEffect } from "../editor/sessionEvents"
+import { getSessionId } from "../editor/editorConfig"
 
 //===============================
 // Repdoc Codemirror Extension
@@ -28,28 +28,7 @@ export const InteractiveCodeField = StateField.define<DocState>({
     },
 })
 
-//===========================
-// Settings Facet
-//===========================
 
-//I don't quite know how this is supposed to work yet
-export const IdFacet = Facet.define<string, string>({
-    // combine: values => {
-    //     if (values.length == 1) return values[0]
-    //     else if (values.length > 1) throw new Error("Unexpected: multiple values for docSessionid!")
-    //     else return ""
-    // }
-})
-
-export function getSessionId(editorState: EditorState) {
-    let values = editorState.facet(IdFacet)
-    if(values.length > 0) {
-        return values[0]
-     }
-     else {
-        throw new Error("Unexpected: Doc session Id missing!")
-     }
-}
 
 export function getDocState(editorState: EditorState) {
     return editorState.field(InteractiveCodeField)

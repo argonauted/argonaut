@@ -4,7 +4,7 @@ import type { Extension} from '@codemirror/state'
 
 import { rsessioncompletions } from "./rsessioncompletions"
 
-import { InteractiveCodeField, IdFacet } from "./interactiveCode"
+import { InteractiveCodeField } from "./interactiveCode"
 
 //===================================
 // Theme
@@ -25,10 +25,9 @@ const baseTheme = EditorView.baseTheme({
   })
 
 /** This is the extension to interface with the reactive code model and display the output in the editor */
-export const repdoc = (options: {docSessionId: string}): Extension => {
+export const repdoc = (): Extension => {
     return [
         baseTheme,
-        IdFacet.of(options.docSessionId),
         InteractiveCodeField,
         rsessioncompletions
     ]
