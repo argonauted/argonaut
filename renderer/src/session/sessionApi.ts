@@ -235,7 +235,7 @@ function disableSessionCommands(reason: string) {
 function sendSessionCommand(cmdEntry: CommandQueueEntry) {
     if(cmdDisabled) {
         //FIGURE OUT STANDARD ERROR HANDLING
-        alert("Error! A command could not be sent: " + cmdDisabledReason)
+        window.dialogApi.alertDialog("Error! A command could not be sent: " + cmdDisabledReason,"error")
         return
     }
 
@@ -375,24 +375,26 @@ function evaluateAnySessionUpdates() {
 }
 
 function sessionCommandSendFailed(e: any) {
-    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
+    
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
     disableSessionCommands("Send Failed - Recovery Implementation needed")
 }
 
 function sessionCommandErrorResponse(msg: string) {
-    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
     disableSessionCommands("Session failure response - Recovery Implementation needed")
 }
             
-function sessionCommandTimeout() {
-    let keepWaiting = confirm("The response is taking a while. Press OK to continue waiting, CANCEL to stop.")
-    if(!keepWaiting) {
-        if(cmdTimeoutHandle !== null) {
-            clearTimeout(cmdTimeoutHandle) 
-            cmdTimeoutHandle = null
+function sessionCommandTimeout() { 
+    window.dialogApi.okCancelDialog("The response is taking a while. Press OK to continue waiting, CANCEL to stop.").then(okPressed => {
+        if(!okPressed) {
+            if(cmdTimeoutHandle !== null) {
+                clearTimeout(cmdTimeoutHandle) 
+                cmdTimeoutHandle = null
+            }
+            window.dialogApi.alertDialog("Well, actually you still have to keep waiting. We have no other options now.")
         }
-        alert("Well, actually you still have to keep waiting. We have not other options now.")
-    }
+    })
 }
 
 //----------------------------

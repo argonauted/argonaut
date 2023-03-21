@@ -11,12 +11,11 @@ export interface IOpenSaveApi {
 
 export interface IDialogApi {
   alertDialog: (body: string, type?: string, okText?: string) => Promise<void>,
-  okCancelDialog: (body: string, type?: string, okText?: string, cancelText?: string) => Promise<{response: number, checkBoxChecked: boolean}>,
-  messageDialog: (body: string, type: string, buttons: [string], defaultId?: number, cancelId?: number) => Promise<{response: number, checkBoxChecked: boolean}>,
-  errorDialog: (title: string, body: string) => Promise<void>
+  okCancelDialog: (body: string, type?: string, okText?: string, cancelText?: string) => Promise<boolean>,
+  messageDialog: (body: string, type: string, buttons: [string], defaultId?: number, cancelId?: number) => Promise<number>,
+  errorDialog: (body: string, title?: string) => Promise<void>
 }
 
-//window.dialogApi.okCancelDialog("The file was saved!").then(result => console.log("result = " + result.response))
 
 // export interface IUtilApi {
 //   getFilePath: (relPath: string) => Promise<string>
