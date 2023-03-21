@@ -1,6 +1,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 import {dialog} from 'electron'
+import path from 'path'
 
 //================================
 // File Access API
@@ -9,11 +10,14 @@ import {dialog} from 'electron'
 export function saveFileAs(event: any, data: string, filePath: string | undefined) {
 	let options = filePath !== undefined ? {defaultPath: filePath} : {}
 	var fileSavePromise = dialog.showSaveDialog(options)
-	fileSavePromise.then( dialogResult => {
+	return fileSavePromise.then( dialogResult => {
 		if((!dialogResult.canceled)&&(dialogResult.filePath)) {
 			const {writeFile} = require('node:fs/promises')
 			return writeFile(dialogResult.filePath, data).then( data => {
-				return filePath
+				let filePath = dialogResult.filePath
+				let fileName = path.basename(filePath)
+				let fileExtension = path.extname(filePath)
+				return {filePath,fileName,fileExtension}
 			})
 		}
 		else {
@@ -25,7 +29,9 @@ export function saveFileAs(event: any, data: string, filePath: string | undefine
 export function saveFile(event: any, data: string, filePath: string)  {
 	const {writeFile} = require('node:fs/promises')
 	return writeFile(filePath, data).then( data => {
-		return filePath
+		let fileName = path.basename(filePath)
+		let fileExtension = path.extname(filePath)
+		return {filePath,fileName,fileExtension}
 	})
 }
 
@@ -37,7 +43,9 @@ export function openFile(event: any) {
 			const filePath = fileOpenResult.filePaths[0]
 			const {readFile} = require('node:fs/promises')
 			return readFile(filePath,'utf8').then( data => {
-				return {data, filePath}
+				let fileName = path.basename(filePath)
+				let fileExtension = path.extname(filePath)
+				return {data, filePath,fileName,fileExtension}
 			})
 		}
 		else {

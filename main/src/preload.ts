@@ -10,7 +10,13 @@ contextBridge.exposeInMainWorld('openSaveApi', {
 	saveFileAs: ( data: string, filePath: string) => ipcRenderer.invoke("fileAccess:saveFileAs",data,filePath),
 	saveFile: ( data: string, filePath: string) => ipcRenderer.invoke("fileAccess:saveFile",data,filePath),
 	openFile: () => ipcRenderer.invoke("fileAccess:openFile"),
-	dummy: () => ipcRenderer.invoke("fileAccess:dummy")
+})
+
+contextBridge.exposeInMainWorld('dialogApi', {
+	alertDialog: (body: string, type?: string, okText?: string) => ipcRenderer.invoke("dialog:alertDialog",body, type, okText),
+	okCancelDialog: (body: string, type?: string, okText?: string, cancelText?: string) => ipcRenderer.invoke("dialog:okCancelDialog",body, type, okText, cancelText),
+	messageDialog: (body: string, type: string, buttons: [string], defaultId?: number, cancelId?: number) => ipcRenderer.invoke("dialog:messageDialog",body, type, buttons, defaultId, cancelId),
+	errorDialog: (title: string, body: string) => ipcRenderer.invoke("dialog:errorDialog",title, body)
 })
 
 contextBridge.exposeInMainWorld('utilApi', {

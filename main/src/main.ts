@@ -2,6 +2,7 @@ import {app, BrowserWindow, dialog, ipcMain} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
 import {saveFileAs, saveFile, openFile} from './fileAccess'
+import {alertDialog, okCancelDialog, messageDialog, errorDialog} from './dialogs'
 import path from 'path'
 
 let windows = []
@@ -82,6 +83,11 @@ app.on('ready', () => {
     ipcMain.handle('fileAccess:saveFileAs',saveFileAs)
     ipcMain.handle('fileAccess:saveFile',saveFile)
     ipcMain.handle('fileAccess:openFile',openFile)
+
+    ipcMain.handle('dialog:alertDialog',alertDialog)
+    ipcMain.handle('dialog:okCancelDialog',okCancelDialog)
+    ipcMain.handle('dialog:messageDialog',messageDialog)
+    ipcMain.handle('dialog:errorDialog',errorDialog)
 
     //ipcMain.handle('utilapi:getfilepath',getFilePath)
 

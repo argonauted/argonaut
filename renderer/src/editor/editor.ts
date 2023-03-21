@@ -7,7 +7,7 @@ import {setup} from "./setup"
 import {rlangsupport} from "../../argonaut-lezer-r/src"
 
 import { repdoc } from "../repdoc/repdoc"
-
+import { docchangedextension } from "../repdoc/docchangedextension"
 import { Editor } from "../appTypes"
 
 /////////////////////////////////////////
@@ -28,7 +28,8 @@ export function getEditor(tabState: TabState, data: string, element: HTMLDivElem
             setup,
             //images(), //ignore the name - this does a console log printout of the parse tree
             repdoc({docSessionId: tabState.id}),
-            rlangsupport()
+            rlangsupport(),
+            docchangedextension()
         ],
         parent: element
     })

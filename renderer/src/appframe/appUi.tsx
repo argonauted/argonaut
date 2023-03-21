@@ -45,7 +45,7 @@ function createTabStateArray(docSessions: Record<string,DocSession>) {
 function createTabState(docSession: DocSession) {
     return {
         id: docSession.id,
-        label: docSession.id,
+        label: docSession.fileName,
         isDirty: docSession.isDirty,
         type: "Rcode"
     }

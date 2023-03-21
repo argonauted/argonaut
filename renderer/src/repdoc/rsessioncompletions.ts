@@ -2,7 +2,7 @@ import {syntaxTree} from "@codemirror/language"
 import {CompletionContext} from "@codemirror/autocomplete"
 import { SyntaxNode, NodeType } from "@lezer/common"
 import { getAutocomplete } from "../session/sessionApi"
-import { getSessionId, getDocState, DocState } from "./interactiveCode"
+import { getSessionId, getDocState } from "./interactiveCode"
 import CellInfo from "./CellInfo"
 
 import {RLanguage} from "../../argonaut-lezer-r/src"

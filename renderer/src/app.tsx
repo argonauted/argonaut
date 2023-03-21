@@ -1,9 +1,23 @@
 import * as React from "react"
 import { renderAppElement, initUi } from "./appframe/appUi"
-import { DocSession, TabState, TabFunctions } from "./appTypes"
+import { DocSession, DocSessionUpdate, TabState, TabFunctions } from "./appTypes"
 import { getEditor, getEditorText, destroyEditor } from "./editor/editor"
+import { setDocChangedHandler } from "./repdoc/docchangedextension"
 import { sessionOutputToView } from "./editor/sessionEvents"
 import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent,initDoc} from "./session/sessionApi"
+
+interface OpenFileData {
+    data?: string
+    filePath?: string
+    fileName: string
+    fileExtension: string
+}
+
+interface SaveFileData {
+    filePath: string
+    fileName: string
+    fileExtension: string
+}
 
 //=============================================
 // app state 
@@ -44,16 +58,61 @@ function onSessionOutput(eventName: string, data: EventPayload) {
     }
 }
 
+function onDocChanged(docSessionId: string) {
+    let docSession = docSessions[docSessionId]
+    if(docSession !== undefined) {
+        if(!docSession.isDirty) {
+            updateDocSession(docSession, {isDirty:true})
+        }
+    }
+}
+
+function updateDocSession(oldDocSession: DocSession, docSessionUpdate: DocSessionUpdate) {
+    let newDocSession = Object.assign({}, oldDocSession)
+    let updated = false
+    if(docSessionUpdate.filePath && docSessionUpdate.filePath != oldDocSession.filePath) {
+        newDocSession.filePath = docSessionUpdate.filePath
+        updated = true
+    }
+    if(docSessionUpdate.fileName) {
+        newDocSession.fileName = docSessionUpdate.fileName
+        updated = true
+    }
+    if(docSessionUpdate.fileExtension) {
+        newDocSession.fileExtension = docSessionUpdate.fileExtension
+        updated = true
+    }
+    if(docSessionUpdate.isDirty) {
+        newDocSession.isDirty = docSessionUpdate.isDirty
+        updated = true
+    }
+    if(docSessionUpdate.lastSavedText) {
+        newDocSession.lastSavedText = docSessionUpdate.lastSavedText
+        updated = true
+    }
+
+    if(updated) {
+        docSessions[newDocSession.id] = newDocSession
+        renderApp()
+    }
+}
+
+//set doc changed handler
+setDocChangedHandler(onDocChanged)
+
+
 //==============================================
 // actions
 //==============================================
 
-function startDocSession(fileInfo: {data: string, filePath: string} | undefined = undefined) {
+function startDocSession(fileData: OpenFileData) {
     const id = "ds" + getNewInt()
     let docSession: DocSession =  {
         id: id,
-        lastSavedText: fileInfo !== undefined ? fileInfo.data : undefined,
-        filePath: fileInfo !== undefined ? fileInfo.filePath : undefined, 
+        lastSavedText: (fileData.data !== undefined) ? fileData.data : undefined,
+        filePath: (fileData.filePath !== undefined) ? fileData.filePath : undefined,
+        fileName: fileData.fileName,
+        fileExtension: fileData.fileExtension, 
         isDirty: false,
         editor: null
     }
@@ -99,13 +158,23 @@ function selectDocSession(id: string) {
 }
 
 function newFile() {
-    startDocSession()
+    //for now make it a .R extension
+    let fileExtension = "R"
+    startDocSession({fileName: createFileName(fileExtension), fileExtension})
 }
 
 function openFile() {
-    window.openSaveApi.openFile().then( result => { 
-        if(result !== null) {
-            startDocSession(result)
+    window.openSaveApi.openFile().then( (fileData: OpenFileData | null) => { 
+        if(fileData !== null) {
+            let docSessionId = getSessionIdForFilePath(fileData.filePath!)
+            if(docSessionId !== null) {
+                console.log("File is already opened")
+                //ADD A DIALOG TO ASK USER ABOUT REVERT!!!
+                selectDocSession(docSessionId)
+            }
+            else {
+                startDocSession(fileData)
+            }
         } 
     }).catch(err => {
         //NEED ERROR HANDLING!
@@ -125,10 +194,10 @@ function saveFile(doSaveAs: boolean = false) {
     let docSession = docSessions[activeSessionId]
 
     //do I want this check?
-    if(docSession.isDirty && !doSaveAs) {
-        console.log("The file is not dirty")
-        return
-    }
+    // if(!docSession.isDirty && !doSaveAs) {
+    //     console.log("The file is not dirty")
+    //     return
+    // }
 
     if(docSession.editor === null) {
         console.log("Editor not set for this doc session!")
@@ -140,10 +209,23 @@ function saveFile(doSaveAs: boolean = false) {
         window.openSaveApi.saveFileAs(data,docSession.filePath) :
         window.openSaveApi.saveFile(data,docSession.filePath!)
 
-    savePromise.then( filePath => { 
-        if(filePath !== null) {
-            docSession.filePath = filePath
-            docSession.lastSavedText = data
+    savePromise.then( (fileData: SaveFileData | null) => { 
+        if(fileData !== null) {
+            // let docSessionId = getSessionIdForFilePath(fileData.filePath!)
+            // if(docSessionId !== null) {
+            //     //add a dialog showing a choice message
+            //     window.dialogApi.alertDialog("There are two files opened with the same name!").then(() => console.log("Returned!"))
+            // }
+
+            //window.dialogApi.okCancelDialog("The file was saved!").then(result => console.log("result = " + result.response))
+
+            updateDocSession(docSession, {
+                filePath: fileData.filePath,
+                fileName: fileData.fileName,
+                fileExtension: fileData.fileExtension,
+                isDirty:false,
+                lastSavedText:data
+            })
         } 
     }).catch(err => {
         //NEED ERROR HANDLING!
@@ -159,6 +241,24 @@ function saveFile(doSaveAs: boolean = false) {
 let nextIntVal = 1
 function getNewInt() {
     return nextIntVal++
+}
+
+let nextFileIntValue = 1
+function getNewFileInt() {
+    return nextFileIntValue++
+}
+
+function createFileName(fileExtension: string) {
+    return `untitled${getNewFileInt()}.${fileExtension}`
+}
+
+/** This function checks the currently opend doc sessions to see if the given file path is already opened.
+ * It returns the docSessionId or null. */
+function getSessionIdForFilePath(filePath: string) {
+    for(let docSessionId in docSessions) {
+        if(docSessions[docSessionId].filePath == filePath) return docSessionId
+    }
+    return null
 }
 
 //==============================================
@@ -197,7 +297,19 @@ function EditorFrame({tabState}:{tabState: TabState}) {
 }
 
 function renderApp() {
-    renderAppElement(docSessions,activeSessionId,menuList,tabFunctions)
+    renderAppElement(docSessions,activeSessionId,getMenuList(),tabFunctions)
+}
+
+//we should improve the menu logic when we add more functionality
+function getMenuList() {
+    if(activeSessionId !== null) {
+        const docSession = docSessions[activeSessionId]
+        if(docSession !== undefined) {
+            if(docSession.isDirty && (docSession.filePath !== undefined) ) return menuListSave
+            else return menuListSaveAs
+        }
+    }
+    return menuListNoSave
 }
 
 //---------------------
@@ -205,13 +317,32 @@ function renderApp() {
 //---------------------
 
 //I should make the contents dynamic, depending on active file
-let menuList = [{
+let menuListSave = [{
     text: "File",
     items: [
         { text: "New", action: newFile },
         { text: "Open", action: openFile },
         { text: "Save", action: saveFile },
         { text: "Save As", action: saveFileAs },
+        { text: "Quit", action: () => console.log("Quit pressed") }
+    ]
+}]
+
+let menuListSaveAs = [{
+    text: "File",
+    items: [
+        { text: "New", action: newFile },
+        { text: "Open", action: openFile },
+        { text: "Save As", action: saveFileAs },
+        { text: "Quit", action: () => console.log("Quit pressed") }
+    ]
+}]
+
+let menuListNoSave = [{
+    text: "File",
+    items: [
+        { text: "New", action: newFile },
+        { text: "Open", action: openFile },
         { text: "Quit", action: () => console.log("Quit pressed") }
     ]
 }]
