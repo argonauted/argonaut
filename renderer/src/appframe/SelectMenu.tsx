@@ -25,11 +25,10 @@ export function SelectMenu({text,items}: MenuProps): React.ReactElement {
         if(selectRef.current !== null) {
             selectRef.current!.selectedIndex = -1
         }
-    },[])
+    })
 
     function changeHandler(event: React.ChangeEvent<HTMLSelectElement>) {
         let action = items[event.currentTarget.selectedIndex].action;
-        event.target.selectedIndex = -1;
         action();
     }
 
