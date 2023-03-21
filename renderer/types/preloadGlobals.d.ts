@@ -16,6 +16,8 @@ export interface IDialogApi {
   errorDialog: (title: string, body: string) => Promise<void>
 }
 
+//window.dialogApi.okCancelDialog("The file was saved!").then(result => console.log("result = " + result.response))
+
 // export interface IUtilApi {
 //   getFilePath: (relPath: string) => Promise<string>
 // }

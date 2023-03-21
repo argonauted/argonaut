@@ -168,8 +168,9 @@ function openFile() {
         if(fileData !== null) {
             let docSessionId = getSessionIdForFilePath(fileData.filePath!)
             if(docSessionId !== null) {
-                console.log("File is already opened")
-                //ADD A DIALOG TO ASK USER ABOUT REVERT!!!
+                //IMPROVE HANDLING OF TWO WINDOWS OPENED
+                const msg = "The file is already opened. The existing opened version will be used."
+                window.dialogApi.alertDialog(msg,"info")
                 selectDocSession(docSessionId)
             }
             else {
@@ -211,13 +212,12 @@ function saveFile(doSaveAs: boolean = false) {
 
     savePromise.then( (fileData: SaveFileData | null) => { 
         if(fileData !== null) {
-            // let docSessionId = getSessionIdForFilePath(fileData.filePath!)
-            // if(docSessionId !== null) {
-            //     //add a dialog showing a choice message
-            //     window.dialogApi.alertDialog("There are two files opened with the same name!").then(() => console.log("Returned!"))
-            // }
-
-            //window.dialogApi.okCancelDialog("The file was saved!").then(result => console.log("result = " + result.response))
+            let docSessionId = getSessionIdForFilePath(fileData.filePath!)
+            if(docSessionId !== null) {
+                //IMPORVE HANDLING OF TWO WINDOWS OPENED
+                const msg = "There are two files opened with the same name. It is recommended you close one of them."
+                window.dialogApi.alertDialog(msg,"warning")
+            }
 
             updateDocSession(docSession, {
                 filePath: fileData.filePath,
