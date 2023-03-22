@@ -3,6 +3,7 @@ import * as ReactDom from "react-dom/client"
 import { MenuProps} from './SelectMenu'
 import { DocSession, TabState, AppFunctions } from '../appTypes'
 import { AppElement } from './AppElement'
+import { LoadingScreen } from './LoadingScreen'
 
 let appElement: HTMLElement | null = null
 let root: ReactDom.Root | null = null
@@ -16,6 +17,17 @@ export function initUi() {
     appElement = document.querySelector("#editorMD")
     if(appElement === null ) throw new Error("Document element not found!")
     root = ReactDom.createRoot(appElement)
+}
+
+export function displayLoadingScreen() {
+    if(root === null) {
+        window.dialogApi.errorDialog("Error - the app could not be loaded.")
+    }
+    else {
+        const loadingScreen = <LoadingScreen/>
+        root.render(loadingScreen)
+    }
+
 }
 
 /** This renders the app element.  */

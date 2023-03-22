@@ -1,10 +1,22 @@
 import * as React from "react"
-import { renderAppElement, initUi } from "./appframe/appUi"
+import { renderAppElement, displayLoadingScreen, initUi } from "./appframe/appUi"
 import { DocSession, DocSessionUpdate, TabState, AppFunctions } from "./appTypes"
 import { getEditor, getEditorText, destroyEditor } from "./editor/editor"
 import { sessionOutputToView } from "./editor/sessionEvents"
 import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent,initDoc} from "./session/sessionApi"
 
+
+//start app
+initUi()
+displayLoadingScreen()
+
+addEventListener("initComplete",onInitComplete)
+addEventListener("sessionOutput",onSessionOutput)
+startSessionListener()
+
+//===================================
+// Types
+//===================================
 interface OpenFileData {
     data?: string
     filePath?: string
@@ -25,15 +37,12 @@ interface SaveFileData {
 let activeSessionId: string | null = null
 let docSessions: Record<string,DocSession> = {}
 
-addEventListener("initComplete",onInitComplete)
-addEventListener("sessionOutput",onSessionOutput)
-startSessionListener()
-
 function onInitComplete(eventName: string, data: EventPayload) {
     console.log("$$$$$$$$$$$$$$$$$$$$$$$$$$$$ INIT COMPLETE")
     console.log("Init complete!")
 
     //END LOAD SCREEN AND ALLOW USER TO START (or something like that)
+    renderApp()
 }
 
 function onSessionOutput(eventName: string, data: EventPayload) {
@@ -422,12 +431,8 @@ window.onbeforeunload = (e) => {
 }
 
 
-//===========================
-//initialize UI
-//===========================
 
-initUi()
-renderApp()
+
 
 
 
