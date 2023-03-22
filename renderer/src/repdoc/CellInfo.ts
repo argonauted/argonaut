@@ -1,6 +1,7 @@
 import CellDisplay from "./CellDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
+import { ErrorInfoStruct } from "../session/sessionApi"
 
 const INVALID_VERSION_NUMBER = -1
 
@@ -18,6 +19,7 @@ interface CellInfoParams {
     consoleLines?: [string,string][]
     plots?: string[]
     values?: string[]
+    errorInfos?: ErrorInfoStruct[]
     outputVersion?: number
 }
 
@@ -27,7 +29,8 @@ interface DisplayStateParams {
     addedConsoleLines?: [string,string][]
     addedPlots?: string[]
     addedValues?: string[]
-    outputVersion?: number,
+    addedErrorInfos?: ErrorInfoStruct[]
+    outputVersion?: number
     inputVersion?: number
 }
 
@@ -47,6 +50,7 @@ export default class CellInfo {
     readonly consoleLines: [string,string][]
     readonly plots: string[]
     readonly values: string[]
+    readonly errorInfos: ErrorInfoStruct[]
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
     readonly cellDisplay: CellDisplay
@@ -70,7 +74,7 @@ export default class CellInfo {
 
     private constructor(editorState: EditorState, refCellInfo: CellInfo | null, {from,to,fromLine,toLine,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
-            consoleLines,plots,values,outputVersion
+            consoleLines,plots,values,errorInfos,outputVersion
         }: CellInfoParams) {
 
         let displayChanged = false
@@ -98,6 +102,7 @@ export default class CellInfo {
             this.consoleLines = []
             this.plots = []
             this.values = []
+            this.errorInfos = []
             if(outputVersion !== undefined) this.outputVersion = INVALID_VERSION_NUMBER
 
             this.cellDisplay = new CellDisplay(this)
@@ -144,6 +149,14 @@ export default class CellInfo {
             }
             else {
                 this.values = refCellInfo!.values
+            }
+
+            if(errorInfos !== undefined) {
+                this.errorInfos = errorInfos
+                displayChanged = true
+            }
+            else {
+                this.errorInfos = refCellInfo!.errorInfos
             }
 
             this.outputVersion = (outputVersion !== undefined) ? outputVersion! : refCellInfo.outputVersion
@@ -258,7 +271,7 @@ export default class CellInfo {
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
     static updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
-        {cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, outputVersion, inputVersion}: DisplayStateParams) {
+        {cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, addedErrorInfos, outputVersion, inputVersion}: DisplayStateParams) {
         
         //output version required if evalStarted or evalCompleted is set
         
@@ -272,6 +285,12 @@ export default class CellInfo {
         if(addedConsoleLines !== undefined) params.consoleLines = cellInfo.consoleLines.concat(addedConsoleLines)
         if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
         if(addedValues !== undefined) params.values = cellInfo.values.concat(addedValues)
+
+        //error infos are reset on each eval
+        if(cellEvalStarted) {
+            params.errorInfos = (addedErrorInfos !== undefined) ? addedErrorInfos : []
+        }
+        else if(addedErrorInfos !== undefined) params.errorInfos = cellInfo.errorInfos.concat(addedErrorInfos)
 
         params.outputVersion = outputVersion
         params.inputVersion = inputVersion

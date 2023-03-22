@@ -1,4 +1,5 @@
 
+const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 
 //===========================
 // Type Definitions
@@ -19,14 +20,21 @@ export type SessionOutputEvent = {
     data: {
         cellEvalStarted?: boolean
         addedConsoleLines?: [string,string][]
-        addedPlots?: [string]
-        addedValues?: [string]
+        addedPlots?: string[]
+        addedValues?: string[]
+        addedErrorInfos?: ErrorInfoStruct[]
         cellEvalCompleted?: boolean
         outputVersion?: number
         docEvalCompleted?: boolean
         nextLineIndex1?: number
     },
     nextId?: string
+}
+
+export type ErrorInfoStruct = {
+    line: number,
+    charNum: number,
+    msg: string
 }
 
 export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
@@ -54,6 +62,7 @@ type SessionLineInfo = {
     pendingLineIndex1: number | null
     docSessionId: string 
 }
+
 //===========================
 // Fields
 //===========================
@@ -478,10 +487,23 @@ function onConsoleOut(text: string) {
                             currentEvent = createSessionOutputEvent()
                             sessionOutputEvents.push(currentEvent)
                         }
-                        if(currentEvent.data.addedConsoleLines === undefined) {
-                            currentEvent.data.addedConsoleLines = []
+                        let errorInfo: ErrorInfoStruct | null = null
+                        if( msgJson.data.msgType == "stderr") {
+                            errorInfo = convertConsoleError(msgJson.data.msg)
                         }
-                        currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
+                        if(errorInfo !== null) {
+                            if(currentEvent.data.addedErrorInfos === undefined) {
+                                currentEvent.data.addedErrorInfos = []
+                            }
+                            currentEvent.data.addedErrorInfos!.push(errorInfo!)
+                        }
+                        else {
+                            if(currentEvent.data.addedConsoleLines === undefined) {
+                                currentEvent.data.addedConsoleLines = []
+                            }
+                            currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
+                        }
+                        
                         break
                     }
                     case "docStatus": {
@@ -588,6 +610,24 @@ function getMessageJson(line: string) {
         console.error("Error parsing msg body from session: " + error.toString())
         return undefined
     }
+}
+
+/** This function attempts to convert a session error message with line and character into a data structure.
+ * It returns the data structure is it can and null if not. */
+function convertConsoleError(msgBody: string): ErrorInfoStruct | null {
+    if(ERROR_REGEX.test(msgBody)) {
+        const lStart = 7
+        const lEnd = msgBody.indexOf(":",lStart)
+        const nEnd = msgBody.indexOf(":",lEnd+1)
+        const nli = msgBody.indexOf("\n")
+        const line = parseInt(msgBody.substring(lStart,lEnd))
+        const charNum = parseInt(msgBody.substring(lEnd+1,nEnd))
+        const msg = msgBody.substring(nEnd+2,nli)
+        if(line !== null && charNum !== null) {
+            return {line,charNum,msg}
+        }
+    }
+    return null
 }
 
 //-------------------------

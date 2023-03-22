@@ -1,15 +1,18 @@
 import CellInfo from "./CellInfo"
 import {WidgetType} from "@codemirror/view"
+import { ErrorInfoStruct } from "../session/sessionApi"
 
 export default class CellDisplay extends WidgetType {
     cellInfo: CellInfo
     activeStatus: string = ""
+    activeErrorCount: number = 0
     activeConsoleCount: number = 0
     activePlotCount: number = 0
     activeValueCount: number = 0
     isVisible = false
 
     element: HTMLElement | null = null
+    errorElement: HTMLElement | null = null
     consoleElement: HTMLElement | null = null
     plotsElement: HTMLElement | null = null
 
@@ -49,8 +52,9 @@ export default class CellDisplay extends WidgetType {
     }
 
     update() {
-        this.isVisible = (this.cellInfo.consoleLines.length > 0)||(this.cellInfo.plots.length > 0)||(this.cellInfo.values.length > 0)
+        this.isVisible = (this.cellInfo.errorInfos.length > 0)||(this.cellInfo.consoleLines.length > 0)||(this.cellInfo.plots.length > 0)||(this.cellInfo.values.length > 0)
         this.updateStatus()
+        this.updateErrors()
         this.updateConsole()
         this.updatePlots()
         //this.updateValues()
@@ -63,6 +67,11 @@ export default class CellDisplay extends WidgetType {
             this.element.style.border = "1px solid #808080"
             this.element.style.padding = "5px"
             this.updateStatus()
+
+            this.errorElement = document.createElement("div")
+            this.element.appendChild(this.errorElement)
+            this.updateErrors()
+
 
             this.consoleElement = document.createElement("div")
             this.element.appendChild(this.consoleElement)
@@ -87,6 +96,22 @@ export default class CellDisplay extends WidgetType {
                                     this.activeStatus == "value pending" ? "#808080" : "#F0F0F8"
                                      
             this.element!.style.backgroundColor = backgroundColor
+        }
+    }
+
+    private updateErrors() {
+        if(this.element !== null && (this.activeErrorCount !== 0 || this.cellInfo.errorInfos.length !== 0) ) {
+            this.removeAllElements(this.errorElement)
+            for(let index = 0; index < this.cellInfo.errorInfos.length; index++) {
+                let spanElement = document.createElement("span")
+                spanElement.className = "cm-rd-errText"
+                spanElement.innerHTML = createErrorMessage(this.cellInfo.errorInfos[index])
+                if(index > 0) {
+                    this.errorElement!.appendChild(document.createElement("br"))
+                }
+                this.errorElement!.appendChild(spanElement)
+            }
+            this.activeErrorCount = this.cellInfo.errorInfos.length
         }
     }
 
@@ -169,4 +194,8 @@ export default class CellDisplay extends WidgetType {
             }
         }
     }
+}
+
+function createErrorMessage(errorInfo: ErrorInfoStruct) {
+    return `Error: ${errorInfo.msg}; internal line: ${errorInfo.line} char number: ${errorInfo.charNum}`
 }
