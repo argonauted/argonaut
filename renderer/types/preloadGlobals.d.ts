@@ -12,19 +12,19 @@ export interface IOpenSaveApi {
 export interface IDialogApi {
   alertDialog: (body: string, type?: string, okText?: string) => Promise<void>,
   okCancelDialog: (body: string, type?: string, okText?: string, cancelText?: string) => Promise<boolean>,
-  messageDialog: (body: string, type: string, buttons: [string], defaultId?: number, cancelId?: number) => Promise<number>,
+  messageDialog: (body: string, type: string, buttons: string[], defaultId?: number, cancelId?: number) => Promise<number>,
   errorDialog: (body: string, title?: string) => Promise<void>
 }
 
-
-// export interface IUtilApi {
-//   getFilePath: (relPath: string) => Promise<string>
-// }
+export interface IUtilApi {
+  getFilePath: (relPath: string) => Promise<string>
+}
 
 declare global {
   interface Window {
     rSessionApi: IRSessionApi,
     openSaveApi: IOpenSaveApi,
     dialogApi: IDialogApi
+    forceCloseBrowserWindow: () => void
   }
 }

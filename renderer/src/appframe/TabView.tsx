@@ -68,7 +68,7 @@ function TabTab({tabState, isSelected, tabFunctions}: TabTabProps) {
             {/*<img src={tabState.iconSrc}/>*/}
             <span>{tabState.label}</span>&nbsp;
             {/*<input type="image" onClick={closeClicked} src={closeImage}/>*/}  
-            <button onClick={closeClicked}>X</button>  
+            <button onClick={closeClicked}>{ tabState.isDirty ? "O" : "X" }</button>  
         </div>
     )
 }
@@ -76,7 +76,7 @@ function TabTab({tabState, isSelected, tabFunctions}: TabTabProps) {
 function TabFrame({tabState, tabFunctions, showing}: TabFrameProps) {
     return (
         <div style={{display: showing ? '' : "none"}} className="tabView_frame">
-            {tabFunctions.getTabElement(tabState,tabFunctions,showing)}
+            {tabFunctions.getTabElement(tabState,tabFunctions)}
         </div>
     )
 }

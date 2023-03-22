@@ -19,7 +19,7 @@ export function okCancelDialog(event: any, body: string, type: string = "info", 
 /** This shows a dialog with a set of buttons buttons, The response is the index of the button selected.
  * The type options are: "none", "info", "error", "question" (which won't make sense here) and "warning"
  */
-export function messageDialog(event: any, body: string, type: string, buttons: [string], defaultId: number, cancelId: number) {
+export function messageDialog(event: any, body: string, type: string, buttons: string[], defaultId: number, cancelId: number) {
     return dialog.showMessageBox({message: body, type, buttons, defaultId, cancelId}).
         then(result => result.response)
 }

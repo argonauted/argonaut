@@ -29,6 +29,9 @@ export function SelectMenu({text,items}: MenuProps): React.ReactElement {
 
     function changeHandler(event: React.ChangeEvent<HTMLSelectElement>) {
         let action = items[event.currentTarget.selectedIndex].action;
+        if(selectRef.current !== null) {
+            selectRef.current.selectedIndex = -1
+        }
         action();
     }
 

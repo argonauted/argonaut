@@ -69,23 +69,30 @@ function onDocChanged(docSessionId: string) {
 function updateDocSession(oldDocSession: DocSession, docSessionUpdate: DocSessionUpdate) {
     let newDocSession = Object.assign({}, oldDocSession)
     let updated = false
-    if(docSessionUpdate.filePath && docSessionUpdate.filePath != oldDocSession.filePath) {
+    //typescript didn't want me to do this
+    // for(let key in docSessionUpdate) {
+    //     if(docSessionUpdate[key] !== oldDocSession[key]) {
+    //         oldDOcSession[key] = docSessionUpdate[key]
+    //         updated = true
+    //     }
+    // }
+    if(docSessionUpdate.filePath !== undefined && docSessionUpdate.filePath != oldDocSession.filePath) {
         newDocSession.filePath = docSessionUpdate.filePath
         updated = true
     }
-    if(docSessionUpdate.fileName) {
+    if(docSessionUpdate.fileName !== undefined && docSessionUpdate.fileName !== oldDocSession.fileName) {
         newDocSession.fileName = docSessionUpdate.fileName
         updated = true
     }
-    if(docSessionUpdate.fileExtension) {
+    if(docSessionUpdate.fileExtension !== undefined && docSessionUpdate.fileExtension !== oldDocSession.fileExtension) {
         newDocSession.fileExtension = docSessionUpdate.fileExtension
         updated = true
     }
-    if(docSessionUpdate.isDirty) {
+    if(docSessionUpdate.isDirty !== undefined && docSessionUpdate.isDirty !== oldDocSession.isDirty) {
         newDocSession.isDirty = docSessionUpdate.isDirty
         updated = true
     }
-    if(docSessionUpdate.lastSavedText) {
+    if(docSessionUpdate.lastSavedText !== undefined && docSessionUpdate.lastSavedText !== oldDocSession.lastSavedText) {
         newDocSession.lastSavedText = docSessionUpdate.lastSavedText
         updated = true
     }
@@ -119,27 +126,54 @@ function startDocSession(fileData: OpenFileData) {
 function closeDocSession(id: string) {
     if(docSessions[id] !== undefined) {
         let docSession = docSessions[id]
-        //-- VERIFY DELETE HERE?? --
         
-        docSession.editor = null  //we already do this, but do it again, I guess 
+        if(docSession.isDirty) {
+            window.dialogApi.messageDialog("The file has not been saved.","warning",["Save and Close","Close without Saving","Cancel"],0,2).then(selection => {
+                switch(selection) {
+                    case 0: //save and close
+                        saveFile(id).then(saveSuccess => {
+                            if(saveSuccess === true) {
+                                closeDocSessionImpl(docSession)
+                            }
+                        }) 
 
-        delete docSessions[id]
-        //-- DO DELETE HERE --
+                    case 1: //close
+                        closeDocSessionImpl(docSession)
 
-        if(activeSessionId == id) {
-            //clumsy way of reading first key - clean this up
-            let firstKey: string | null = null
-            for(let key in docSessions) {
-                firstKey = key
-                break
-            }
-            activeSessionId = firstKey
+
+                    case 2:
+                    default: //cancel/no action
+                        return
+                }
+            })
         }
-        renderApp()
+        else {
+            closeDocSessionImpl(docSession)
+        }
     }
     else {
         console.log("Doc Session ID not found: " + id)
     }
+}
+
+function closeDocSessionImpl(docSession: DocSession) {
+    let id = docSession.id    
+
+    docSession.editor = null  //we already do this, but do it again, I guess 
+
+    delete docSessions[id]
+    //-- DO DELETE HERE --
+
+    if(activeSessionId == id) {
+        //clumsy way of reading first key - clean this up
+        let firstKey: string | null = null
+        for(let key in docSessions) {
+            firstKey = key
+            break
+        }
+        activeSessionId = firstKey
+    }
+    renderApp()
 }
 
 function selectDocSession(id: string) {
@@ -159,7 +193,7 @@ function newFile() {
 }
 
 function openFile() {
-    window.openSaveApi.openFile().then( (fileData: OpenFileData | null) => { 
+    return window.openSaveApi.openFile().then( (fileData: OpenFileData | null) => { 
         if(fileData !== null) {
             let docSessionId = lookupSessionIdForFilePath(fileData.filePath!)
             if(docSessionId !== null) {
@@ -171,37 +205,35 @@ function openFile() {
             else {
                 startDocSession(fileData)
             }
+            return true
         } 
+        else {
+            return false
+        }
     }).catch(err => {
-        //NEED ERROR HANDLING!
-        console.log(err)
+        window.dialogApi.errorDialog("Error opening the file!" + String(err))
+        return false
     })
 }
 
 function saveFileAs(sessionId: string | null = activeSessionId) {
-    saveFile(sessionId, true)
+    return saveFile(sessionId, true)
 }
 
 function saveFile(sessionId: string | null = activeSessionId, doSaveAs: boolean = false) {
     if(sessionId === null) {
         console.log("Save attempted with no session set")
-        return
+        return Promise.resolve(false)
     }
     let docSession = docSessions[sessionId]
     if(docSession === undefined) {
         console.log("Session object not found for save")
-        return
+        return Promise.resolve(false)
     }
-
-    //do I want this check?
-    // if(!docSession.isDirty && !doSaveAs) {
-    //     console.log("The file is not dirty")
-    //     return
-    // }
 
     if(docSession.editor === null) {
         console.log("Editor not set for this doc session!")
-        return
+        return Promise.resolve(false)
     }
 
     const data = getEditorText(docSession.editor)
@@ -209,12 +241,12 @@ function saveFile(sessionId: string | null = activeSessionId, doSaveAs: boolean 
         window.openSaveApi.saveFileAs(data,docSession.filePath) :
         window.openSaveApi.saveFile(data,docSession.filePath!)
 
-    savePromise.then( (fileData: SaveFileData | null) => { 
+    return savePromise.then( (fileData: SaveFileData | null) => { 
         if(fileData !== null) {
             let otherDocSessionId = lookupSessionIdForFilePath(fileData.filePath!,docSession.id)
             if(otherDocSessionId !== null) {
                 //IMPORVE HANDLING OF TWO WINDOWS OPENED
-                const msg = "There are two files opened with the same name. It is recommended you close one of them."
+                const msg = "The file was saved in the same location as another file opened in the editor. The editor does not enforce these files match and saving one will overwrite the other."
                 window.dialogApi.alertDialog(msg,"warning")
             }
 
@@ -225,12 +257,22 @@ function saveFile(sessionId: string | null = activeSessionId, doSaveAs: boolean 
                 isDirty:false,
                 lastSavedText:data
             })
+
+            return true
         } 
+        else {
+            return false
+        }
     }).catch(err => {
-        //NEED ERROR HANDLING!
-        console.log(err)
+        window.dialogApi.errorDialog("Error saving file: " + err.toString())
+        return false
     })
   
+}
+
+function quitApp() {
+    //use the normal close dirty check triggered below
+    window.close()
 }
 
 //==============================================
@@ -260,12 +302,19 @@ function lookupSessionIdForFilePath(filePath: string, excludedId?: string) {
     return null
 }
 
+function getIsDirty() {
+    for(let docSessionId in docSessions) {
+        if(docSessions[docSessionId].isDirty) return true
+    }
+    return false
+}
+
 //==============================================
 // UI
 //==============================================
 
-/** This is the lookup function to retrieve a tab element. */
-function getTabElement(tabState: TabState, tabFunctions: AppFunctions, isShowing: boolean) {
+/** This is the lookup function to retrieve a tab element for a given tab state. */
+function getTabElement(tabState: TabState, tabFunctions: AppFunctions) {
     return <EditorFrame tabState={tabState} tabFunctions={tabFunctions} />
 }
 
@@ -323,7 +372,7 @@ let menuListSave = [{
         { text: "Open", action: openFile },
         { text: "Save", action: saveFile },
         { text: "Save As", action: saveFileAs },
-        { text: "Quit", action: () => console.log("Quit pressed") }
+        { text: "Quit", action: quitApp }
     ]
 }]
 
@@ -333,7 +382,7 @@ let menuListSaveAs = [{
         { text: "New", action: newFile },
         { text: "Open", action: openFile },
         { text: "Save As", action: saveFileAs },
-        { text: "Quit", action: () => console.log("Quit pressed") }
+        { text: "Quit", action: quitApp }
     ]
 }]
 
@@ -342,7 +391,7 @@ let menuListNoSave = [{
     items: [
         { text: "New", action: newFile },
         { text: "Open", action: openFile },
-        { text: "Quit", action: () => console.log("Quit pressed") }
+        { text: "Quit", action: quitApp }
     ]
 }]
 
@@ -353,6 +402,25 @@ const tabFunctions: AppFunctions = {
     saveFile: saveFile,
     onDocChanged: onDocChanged
 }
+
+//=========================
+// Is dirty check for closing app
+//=========================
+
+window.onbeforeunload = (e) => {
+    if(getIsDirty()) {
+        window.dialogApi.okCancelDialog("There is unsaved data. Are you sure you want to exit?","warning","Exit","Stay").then( doExit => {
+            if(doExit) {
+                window.forceCloseBrowserWindow()
+            }
+        })
+        e.returnValue = true //prevent close
+    }
+    else {
+        //allow close
+    }
+}
+
 
 //===========================
 //initialize UI

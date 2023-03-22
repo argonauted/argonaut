@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('dialogApi', {
 	errorDialog: (title: string, body: string) => ipcRenderer.invoke("dialog:errorDialog",title, body)
 })
 
+contextBridge.exposeInMainWorld('forceCloseBrowserWindow', () => ipcRenderer.invoke('forceCloseBrowserWindow'))
+
 contextBridge.exposeInMainWorld('utilApi', {
 	getFilePath: relPath => ipcRenderer.invoke("utilapi:getfilepath",relPath)
 	
