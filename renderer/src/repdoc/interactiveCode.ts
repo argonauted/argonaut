@@ -68,7 +68,14 @@ type CellUpdateInfo = {
     codeText?: string
 }
 
+// type PreparseError = {
+//     from: number,
+//     to: number,
+//     msg: string
+// }
+
 type ParseErrorInfo = {
+    //errors: PreparseError[],
     hasError: boolean
 }
 
@@ -662,6 +669,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
 
     //record if there is a parse error
     let parseErrorInfo: ParseErrorInfo = {
+        //errors: [],
         hasError: false
     }
 
@@ -776,6 +784,8 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
                 case "\u26A0": {
                     console.log("Parse Error!")
                     parseErrorInfo.hasError = true
+                    //let e = {from: node.from, to: node.to, msg: "Preparse error"}
+                    //parseErrorInfo.errors.push(e)
                 }
 
                 default:

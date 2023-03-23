@@ -5,7 +5,7 @@ import { foldGutter, indentOnInput, syntaxHighlighting, defaultHighlightStyle, b
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
-import { lintGutter, lintKeymap } from '@codemirror/lint'
+import { /*lintGutter,*/ lintKeymap } from '@codemirror/lint'
 
 export const setup = /*@__PURE__*/(() => [
     lineNumbers(),
@@ -13,7 +13,7 @@ export const setup = /*@__PURE__*/(() => [
     highlightSpecialChars(),
     history(),
     foldGutter(),
-    lintGutter(),
+    /*lintGutter(),*/
     drawSelection(),
     dropCursor(),
     EditorState.allowMultipleSelections.of(false),

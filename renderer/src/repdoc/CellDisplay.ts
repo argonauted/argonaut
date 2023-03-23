@@ -197,5 +197,5 @@ export default class CellDisplay extends WidgetType {
 }
 
 function createErrorMessage(errorInfo: ErrorInfoStruct) {
-    return `Error: ${errorInfo.msg}; internal line: ${errorInfo.line} char number: ${errorInfo.charNum}`
+    return `Error: ${errorInfo.msg}`
 }
