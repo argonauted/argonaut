@@ -3,20 +3,28 @@ export interface IRSessionApi {
   getBinary: (fileName: string) => Promise<Object>
 }
 
+export interface IOpenSaveApi {
+  saveFileAs: (data: string, filePath: string | undefined) => Promise<{filePath: string, fileName: string, fileExtension: string} | null>,
+  saveFile: (data: string, filePath: string) => Promise<{filePath: string, fileName: string, fileExtension: string} | null>,
+  openFile: () => Promise<{data: string, filePath: string, fileName: string, fileExtension: string} | null>,
+}
+
+export interface IDialogApi {
+  alertDialog: (body: string, type?: string, okText?: string) => Promise<void>,
+  okCancelDialog: (body: string, type?: string, okText?: string, cancelText?: string) => Promise<boolean>,
+  messageDialog: (body: string, type: string, buttons: string[], defaultId?: number, cancelId?: number) => Promise<number>,
+  errorDialog: (body: string, title?: string) => Promise<void>
+}
+
 export interface IUtilApi {
   getFilePath: (relPath: string) => Promise<string>
 }
 
-// export interface IOpenSaveApi {
-//   loadConfig: (onOpen) => void
-//   saveFileAs: (fileMetadata,data,onSave) => void,
-//   saveFile: (fileMetadata,data,onSave) => void,
-//   openFile: (onOpen) => void
-// }
-
 declare global {
   interface Window {
     rSessionApi: IRSessionApi,
-    // openSaveApi: IOpenSaveApi
+    openSaveApi: IOpenSaveApi,
+    dialogApi: IDialogApi
+    forceCloseBrowserWindow: () => void
   }
 }

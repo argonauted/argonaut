@@ -1,4 +1,5 @@
 
+const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 
 //===========================
 // Type Definitions
@@ -17,22 +18,33 @@ export type SessionOutputEvent = {
     session: string | null,
     lineId: string | null
     data: {
-        evalStarted?: boolean
+        cellEvalStarted?: boolean
         addedConsoleLines?: [string,string][]
-        addedPlots?: [string]
-        addedValues?: [string]
-        evalCompleted?: boolean
+        addedPlots?: string[]
+        addedValues?: string[]
+        addedErrorInfos?: ErrorInfoStruct[]
+        cellEvalCompleted?: boolean
         outputVersion?: number
+        docEvalCompleted?: boolean
+        nextLineIndex1?: number
     },
     nextId?: string
 }
 
+export type ErrorInfoStruct = {
+    line: number,
+    charNum: number,
+    msg: string
+}
+
+export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
+                           null /* initComplete */
+  
 /** This is the format used in the sendCommand function for a RSession request. */
 type SessionRequestWrapper = {
     scope: string
     method: string
     params: any[]
-    processResponse?: ((arg0: any) => void)
 }
 
 /** This is the format of a response from the RSession. */
@@ -41,8 +53,16 @@ type SessionResponse = any
 
 type CommandQueueEntry = {
     f: any,
-    args: IArguments | any[]
+    session: string, 
+    args: any[]
 }
+
+type SessionLineInfo = {
+    maxEvalLine1: number | null 
+    pendingLineIndex1: number | null
+    docSessionId: string 
+}
+
 //===========================
 // Fields
 //===========================
@@ -59,7 +79,6 @@ let DUMMY_CMD: SessionRequestWrapper = {scope: 'rpc', method: 'console_input', p
 
 let listeners: Record<string,((eventName: string, data: any) => void)[]>  = {}
 
-//let initComplete = false
 let eventIndex = 0
 
 let firstPass = true
@@ -76,6 +95,16 @@ let cmdDisabledReason = "Init not yet completed!"
 let cmdTimeoutHandle: NodeJS.Timeout | null = null
 //let cmdTimeoutHandle: Timer | null = null
 
+let sessionLineInfoMap: Record<string,SessionLineInfo> = {}
+
+function addSessionLineInfo(docSessionId: string) {
+    sessionLineInfoMap[docSessionId] = {
+        docSessionId: docSessionId,
+        maxEvalLine1:  null,
+        pendingLineIndex1:  null
+    }
+}
+
 //===========================
 // Main Functions
 //===========================
@@ -84,11 +113,8 @@ let cmdTimeoutHandle: NodeJS.Timeout | null = null
 
 export function startSessionListener() {   
     if(firstPass) {
-        //send a dummy command
-        sendCommand(DUMMY_CMD)
+        sendCommand(DUMMY_CMD) //send a dummy command - does this do anything?
     }
-
-    //start event listener
     listenForEvents()
 }
 
@@ -98,7 +124,7 @@ export function stopSessionListener() {
 
 //CLIENT LISTENER
 
-export function addEventListener(eventName: string, callback: (eventName: string, data: any) => void ) {
+export function addEventListener(eventName: string, callback: (eventName: string, data: EventPayload) => void ) {
     let listenerList = listeners[eventName]
     if(listenerList === undefined) {
         listenerList = []
@@ -115,6 +141,28 @@ export function randomIdString() {
     return "f" + Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(32)
 }
 
+export function setMaxEvalLine1(docSessionId: string, maxLine1: number) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo !== undefined) {
+        sessionLineInfo.maxEvalLine1 = maxLine1
+        requestEvaluateSessionCheck(docSessionId)
+    }
+    else {
+        console.log("Trying to set max eval line on unknown session: " + docSessionId)
+    }
+}
+
+export function clearMaxEvalLine1(docSessionId: string) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo !== undefined) {
+        sessionLineInfo.maxEvalLine1 = null
+        requestEvaluateSessionCheck(docSessionId)
+    }
+    else {
+        console.log("Trying to clear max eval line on unknown session: " + docSessionId)
+    }
+}
+
 //---------------------------
 // Commands
 //---------------------------
@@ -128,11 +176,50 @@ export function randomIdString() {
 // - I have to manage fialed commands better generally
 
 export function initDoc(docSessionId: string) {
-    sendSessionCommand({f: initDocImpl, args: arguments})
+    addSessionLineInfo(docSessionId)
+    sendSessionCommand({f: initDocImpl, session: docSessionId, args: [docSessionId]})
+}
+
+export function closeDoc(docSessionId: string) {
+    console.log("IMPLEMENT CLOSE DOC IN SessionApi!")
 }
 
 export function evaluateSessionCmds(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
-    sendSessionCommand({f: evaluateSessionCmdsImpl, args: arguments})
+    sendSessionCommand({f: evaluateSessionCmdsImpl, session: docSessionId, args: [docSessionId, cmds, cmdIndex]})
+}
+
+
+export function setActiveCell(docSessionId: string, prevLineId: string, force = false) {
+    if(activeSession != docSessionId || activeLineId != prevLineId || force) {
+        sendSessionCommand({f: setActiveCellImpl, session: docSessionId, args: [docSessionId, prevLineId]})
+    }
+}
+
+export function getAutocomplete(docSessionId: string, prevLineId: string | null, expressionText: string, expressionLine: string) {
+    if(activeSession != docSessionId || activeLineId != prevLineId) return Promise.resolve(null)
+    
+    let cmd: SessionRequestWrapper = {
+        scope: 'rpc',
+        method: 'get_completions',
+        params: [
+            "",
+            [expressionText],
+            [6],
+            [0],
+            "",
+            "",
+            [],
+            [],
+            false,
+            "",
+            "",
+            expressionLine,
+            true
+        ]
+    }
+    return new Promise((resolve,reject) => {   
+        sendCommand(cmd,arg0 => resolve(arg0),arg0 => reject(arg0))
+    })
 }
                 
 
@@ -157,7 +244,8 @@ function disableSessionCommands(reason: string) {
 function sendSessionCommand(cmdEntry: CommandQueueEntry) {
     if(cmdDisabled) {
         //FIGURE OUT STANDARD ERROR HANDLING
-        alert("Error! A command could not be sent: " + cmdDisabledReason)
+        window.dialogApi.alertDialog("Error! A command could not be sent: " + cmdDisabledReason,"error")
+        return
     }
 
     if(pendingCommand !== null) {
@@ -170,21 +258,27 @@ function sendSessionCommand(cmdEntry: CommandQueueEntry) {
 }
 
 function sendCommandFromQueue() {
-    let cmdEntry = sessionCmdQueue.splice(0,1)[0]
+    let cmdEntry = sessionCmdQueue.shift()!
+    pendingCommand = cmdEntry
     cmdEntry.f.apply(null,cmdEntry.args)
 }
 
 function initDocImpl(docSessionId: string) {
     let rCmd = `initializeDocState("${docSessionId}")`
     activeSession = docSessionId
-    sendSessionCommandImpl(docSessionId,rCmd)
+    sendSessionCommandImpl(rCmd) //docSessionId is the command key for init cmd
 }
 
 function evaluateSessionCmdsImpl(docSessionId: string, cmds: CodeCommand[], cmdIndex: number) {
     let childCmdStrings = cmds.map(cmdToCmdListString)
     let childCmdListString = "list(" + childCmdStrings.join(",") + ")"
     let rCmd = `multiCmd("${docSessionId}",${childCmdListString},${cmdIndex})`
-    sendSessionCommandImpl(docSessionId,rCmd)
+    sendSessionCommandImpl(rCmd)
+}
+
+function setActiveCellImpl(docSessionId: string, prevLineId: string) {
+    let rCmd = `setActiveLine("${docSessionId},${prevLineId}")`
+    sendSessionCommandImpl(rCmd)
 }
 
 function cmdToCmdListString(cmd: CodeCommand) {
@@ -199,57 +293,117 @@ function cmdToCmdListString(cmd: CodeCommand) {
     return cmdListString
 }
 
-const EVALUATE_SESSION_COMMAND_ENTRY = {f:null, args: []}
+const EVALUATE_SESSION_COMMAND_ENTRY = {f:evaluateSessionUpdateImpl, session: "", args: []} //we don't set the args or session since this is not used
 const SESSION_CMD_TIMEOUT_MSEC = 60000
 
 function evaluateSessionUpdateImpl(docSessionId: string) {
-    pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY //this is a placeholder!
-    sendSessionCommandImpl(docSessionId,`evaluate("${docSessionId}")`)
+    pendingCommand = EVALUATE_SESSION_COMMAND_ENTRY
+    sendSessionCommandImpl(`evaluate("${docSessionId}")`)
 }
 
-function sendSessionCommandImpl(docSessionId: string, rCode: string) {
+function sendSessionCommandImpl(rCode: string) {
     cmdTimeoutHandle = setInterval(sessionCommandTimeout,SESSION_CMD_TIMEOUT_MSEC)
     sendCommand({scope: 'rpc', method: 'execute_code', params: [rCode]},undefined,sessionCommandSendFailed)
+    //code to sent over consile input rather than execute code
+    //sendCommand({scope: 'rpc', method: 'console_input', params: [rCode,"",0]},undefined,sessionCommandSendFailed)
 }
 
 function sessionCommandCompleted(statusJson: any) {
-    if(cmdTimeoutHandle !== null) {
-        clearTimeout(cmdTimeoutHandle) 
-        cmdTimeoutHandle = null
-    }
-    setTimeout(() => {
-        if(sessionCmdQueue.length > 0) {
-            sendCommandFromQueue() 
-        }
-        else if(statusJson.data.evalComplete === false) {
-            //more lines to evaluate
-            evaluateSessionUpdateImpl(statusJson.session)
+    let sessionLineInfo = sessionLineInfoMap[statusJson.session]
+    if(sessionLineInfo) {
+        if(statusJson.data.evalComplete) {
+            sessionLineInfo.pendingLineIndex1 = null
         }
         else {
-            pendingCommand = null
+            sessionLineInfo.pendingLineIndex1 = statusJson.data.nextLineIndex
         }
-    },0)
-}
 
-function sessionCommandSendFailed(e: any) {
-    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
-    disableSessionCommands("Send Failed - Recovery Implementation needed")
-}
-
-function sessionCommandErrorResponse(msg: string) {
-    setTimeout(() => alert("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
-    disableSessionCommands("Session failure response - Recovery Implementation needed")
-}
-            
-function sessionCommandTimeout() {
-    let keepWaiting = confirm("The response is taking a while. Press OK to continue waiting, CANCEL to stop.")
-    if(!keepWaiting) {
         if(cmdTimeoutHandle !== null) {
             clearTimeout(cmdTimeoutHandle) 
             cmdTimeoutHandle = null
         }
-        alert("Well, actually you still have to keep waiting. We have not other options now.")
+        setTimeout(() => cmdCompleted(statusJson.session),0)
     }
+}
+
+function cmdCompleted(docSessionId: string) {
+    pendingCommand = null
+    //complete evaluation for the current session if needed
+    if(sessionEvaluateNeeded(docSessionId)) {
+        if(isNextComdQueueForSession(docSessionId)) {
+            sendCommandFromQueue() //do a pending command instead of eval - only if next for now. TBR
+        }
+        else {
+            evaluateSessionUpdateImpl(docSessionId) //send evaluate
+        }
+    }
+    else if(sessionCmdQueue.length > 0) {
+        sendCommandFromQueue() //execute any queued command
+    }
+    else {
+        evaluateAnySessionUpdates() //execute any need eval (I don't think we should have them?)
+    }
+}
+
+function isNextComdQueueForSession(docSessionId: string) {
+    if(sessionCmdQueue.length > 0) {
+        return (sessionCmdQueue[0].session == docSessionId)
+    }
+    else {
+        return false
+    }
+}
+
+function requestEvaluateSessionCheck(docSessionId: string) {
+    setTimeout(() => {
+        //this code assumes pendingCommand will act in place of a evaluate command
+        if( !pendingCommand && sessionEvaluateNeeded(docSessionId) ) {
+            evaluateSessionUpdateImpl(docSessionId)
+        }
+    },0)
+}
+
+function sessionEvaluateNeeded(docSessionId: string) {
+    let sessionLineInfo = sessionLineInfoMap[docSessionId]
+    if(sessionLineInfo) {
+        return ( sessionLineInfo.pendingLineIndex1 !== null && 
+            (sessionLineInfo.maxEvalLine1 == null || sessionLineInfo.maxEvalLine1! >= sessionLineInfo.pendingLineIndex1!) )
+    }
+    else {
+        return false
+    }
+}
+
+function evaluateAnySessionUpdates() {
+    for(let sessionId in sessionLineInfoMap) {
+        if(sessionEvaluateNeeded(sessionId)) {
+            evaluateSessionUpdateImpl(sessionId)
+            return
+        }
+    }
+}
+
+function sessionCommandSendFailed(e: any) {
+    
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
+    disableSessionCommands("Send Failed - Recovery Implementation needed")
+}
+
+function sessionCommandErrorResponse(msg: string) {
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
+    disableSessionCommands("Session failure response - Recovery Implementation needed")
+}
+            
+function sessionCommandTimeout() { 
+    window.dialogApi.okCancelDialog("The response is taking a while. Press OK to continue waiting, CANCEL to stop.").then(okPressed => {
+        if(!okPressed) {
+            if(cmdTimeoutHandle !== null) {
+                clearTimeout(cmdTimeoutHandle) 
+                cmdTimeoutHandle = null
+            }
+            window.dialogApi.alertDialog("Well, actually you still have to keep waiting. We have no other options now.")
+        }
+    })
 }
 
 //----------------------------
@@ -319,9 +473,12 @@ function onConsoleOut(text: string) {
                         activeLineId = msgJson.data.lineId
                         lineActive = true
         
+                        //I ASSUME CURRENT EVENT NOT SET. IS THAT OK?
+                        if(currentEvent !== null) throw new Error("Unepxected: start eval not first message in a console out")
+
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
-                        currentEvent.data.evalStarted = true
+                        currentEvent.data.cellEvalStarted = true
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
                         break
                     }
@@ -330,10 +487,23 @@ function onConsoleOut(text: string) {
                             currentEvent = createSessionOutputEvent()
                             sessionOutputEvents.push(currentEvent)
                         }
-                        if(currentEvent.data.addedConsoleLines === undefined) {
-                            currentEvent.data.addedConsoleLines = []
+                        let errorInfo: ErrorInfoStruct | null = null
+                        if( msgJson.data.msgType == "stderr") {
+                            errorInfo = convertConsoleError(msgJson.data.msg)
                         }
-                        currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
+                        if(errorInfo !== null) {
+                            if(currentEvent.data.addedErrorInfos === undefined) {
+                                currentEvent.data.addedErrorInfos = []
+                            }
+                            currentEvent.data.addedErrorInfos!.push(errorInfo!)
+                        }
+                        else {
+                            if(currentEvent.data.addedConsoleLines === undefined) {
+                                currentEvent.data.addedConsoleLines = []
+                            }
+                            currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
+                        }
+                        
                         break
                     }
                     case "docStatus": {
@@ -343,17 +513,33 @@ function onConsoleOut(text: string) {
                         if((msgJson.session !== activeSession)&&(lineActive)) {
                             //FIGURE OUT WHAT TO DO HERE...
                             console.error("Session msg Event not equal to active session with line active")
+                            //ALSO, WHAT IF LINE IS NOT ACTIVE? I DON'T THINK WE EXPECT THAT EITHER
+                            //I think we check if line is active because then the activeSession is valid? But if we get a docStatue
+                            //with no active session, what does that mean?
                         }
 
                         if(currentEvent === null) {
                             currentEvent = createSessionOutputEvent()
                             sessionOutputEvents.push(currentEvent)
                         }
-                        currentEvent.data.evalCompleted = true
-                        currentEvent.data.outputVersion = msgJson.data.cmdIndex //should be the same as above if in the same line
-                        //LATER - we need to add next id/index to evaluate
+                        currentEvent.data.cellEvalCompleted = true
+                        currentEvent.data.outputVersion = msgJson.data.cmdIndex
+                        currentEvent.data.docEvalCompleted = msgJson.data.evalComplete
+                        if(!msgJson.data.evalComplete) {
+                            currentEvent.data.nextLineIndex1 = msgJson.data.nextLineIndex
+                        }
+
                         lineActive = false
                         currentEvent = null
+                        break
+                    }
+                    case "activeLineStatus": {
+                        if(lineActive) {
+                            //Doh! We don't want this to happen
+                            console.log("Warning! Active line status reset while line active!")
+                        }
+                        activeSession = msgJson.session
+                        activeLineId = msgJson.data.activeLineId
                         break
                     }
         
@@ -378,7 +564,9 @@ function onConsoleOut(text: string) {
         }
     })
 
-    dispatch("sessionOutput",sessionOutputEvents)
+    if(sessionOutputEvents.length > 0) {
+        dispatch("sessionOutput",sessionOutputEvents)
+    }
 }
 
 function onConsoleErr(msg: string) {
@@ -422,6 +610,24 @@ function getMessageJson(line: string) {
         console.error("Error parsing msg body from session: " + error.toString())
         return undefined
     }
+}
+
+/** This function attempts to convert a session error message with line and character into a data structure.
+ * It returns the data structure is it can and null if not. */
+function convertConsoleError(msgBody: string): ErrorInfoStruct | null {
+    if(ERROR_REGEX.test(msgBody)) {
+        const lStart = 7
+        const lEnd = msgBody.indexOf(":",lStart)
+        const nEnd = msgBody.indexOf(":",lEnd+1)
+        const nli = msgBody.indexOf("\n")
+        const line = parseInt(msgBody.substring(lStart,lEnd))
+        const charNum = parseInt(msgBody.substring(lEnd+1,nEnd))
+        const msg = msgBody.substring(nEnd+2,nli)
+        if(line !== null && charNum !== null) {
+            return {line,charNum,msg}
+        }
+    }
+    return null
 }
 
 //-------------------------

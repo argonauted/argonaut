@@ -1,12 +1,13 @@
 import {app, BrowserWindow, dialog, ipcMain} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
+import {saveFileAs, saveFile, openFile} from './fileAccess'
+import {alertDialog, okCancelDialog, messageDialog, errorDialog} from './dialogs'
 import path from 'path'
 
 let windows = []
 
 const APP_FILE = "./renderer/web/index.html"
-//const APP_FILE = "./renderer/web/editor.html"
 
 let rSession = new RSession()
 
@@ -32,33 +33,6 @@ function createWindow(fileName) {
 
     // and load the index.html of the app.
     win.loadFile(fileName);  
-  
-    win.on('close',(e) => {
- 
-        var isDirtyPromise = win.webContents.executeJavaScript("getIsDirty()");
-        isDirtyPromise.then( (isDirty) => {
-            if(isDirty) {
-				console.log("about to show dialog");
-                var resultPromise = dialog.showMessageBox({
-                    message: "There is unsaved data. Are you sure you want to exit?",
-                    buttons: ["Exit","Stay"]
-                });
-                resultPromise.then( result => {
-                    if(result.response == 0) win.destroy();
-                })
-            }
-            else {
-                win.destroy();
-            }
-        }).catch( (msg) => {
-            //just detroy
-            console.log("Error in close check. Exiting");
-            win.destroy();
-        })
-        
-        //we won't close here - we will use promise result above
-        e.preventDefault();
-    });
 
     // Emitted when the window is closed.
     win.on('closed', () => {
@@ -78,6 +52,18 @@ app.on('ready', () => {
 
     ipcMain.handle('rsession:sendrpcrequest',sendRpcRequest)
     ipcMain.handle('ressions:getbinary',getBinary)
+
+    ipcMain.handle('fileAccess:saveFileAs',saveFileAs)
+    ipcMain.handle('fileAccess:saveFile',saveFile)
+    ipcMain.handle('fileAccess:openFile',openFile)
+
+    ipcMain.handle('dialog:alertDialog',alertDialog)
+    ipcMain.handle('dialog:okCancelDialog',okCancelDialog)
+    ipcMain.handle('dialog:messageDialog',messageDialog)
+    ipcMain.handle('dialog:errorDialog',errorDialog)
+
+    ipcMain.handle('forceCloseBrowserWindow',forceCloseBrowserWindow)
+
     ipcMain.handle('utilapi:getfilepath',getFilePath)
 
     createWindow(APP_FILE)
@@ -110,5 +96,9 @@ function getBinary(event: any,fileName: string) {
 
 function getFilePath(event: any,relPath: string) {
     return path.join(__dirname,relPath)
+}
+
+function forceCloseBrowserWindow(event: any) {
+    if(event && event.sender && event.sender.destroy) event.sender.destroy()
 }
 

@@ -1,3 +1,7 @@
+## 2/23/23
+## This grammar does include the ending newline in the cell 
+##
+
 @precedence {
   exprterm @left,
   exprx @left,
@@ -46,29 +50,29 @@ Identifier {
   simpleName | backtickName   
 }
 
-
+@external prop xxx from "./props"
 
 cellPattern { (expression  ";" !exprterm)* expression ";"? !exprterm }
 
-EmptyCell { () }
-emptyLine { EmptyCell newline }
-Cell { cellPattern }
-line { Cell newline emptyLine* !exprterm }
+
+EmptyCell[] { newline }
+Cell { cellPattern newline }
+cellGroup { Cell EmptyCell* !exprterm }
 EndCell { cellPattern eof}
 EmptyEnd { eof }
 
-BEmptyCell { () }
-bEmptyLine { BEmptyCell newline }
-BCell { cellPattern }
-bLine { BCell newline bEmptyLine* !exprterm }
-BEndCell { cellPattern closeBrace}
+BEmptyCell { newline }
+BCell { cellPattern newline }
+bCellGroup { BCell BEmptyCell* !exprterm }
+BEndCell { cellPattern closeBrace }
 BEmptyEnd { closeBrace }
-bStart { openBrace ( bEmptyLine | bLine) }
+bStart { openBrace ( BEmptyCell | BCell) }
 BEmptyBlock { openBrace closeBrace }
 
-@top Script { emptyLine* line* ( EndCell | EmptyEnd )  }
+@top Script { EmptyCell* cellGroup* ( EndCell | EmptyEnd )  }
 
-Block { bStart bEmptyLine* bLine* ( BEndCell | BEmptyEnd ) | BEmptyBlock | openBrace BEndCell }
+Block { bStart BEmptyCell* bCellGroup* ( BEndCell | BEmptyEnd ) | BEmptyBlock | openBrace BEndCell }
+
 
 ParenExpr { 
   openParen newline* expression newline* closeParen
@@ -95,8 +99,8 @@ BinaryExpr {
     expression !rassign AssignOp< "->" | "->>" > newline* expression |
     expression !eqassign equalsAssignOp newline* expression |
     expression !frmla GenOp< "~" > newline* expression | 
-    expression !compon MemberOp< "$" | "@" > newline* ( Identifier | Character ) |
-    Identifier !member MemberOp< "::" | ":::" > newline* Identifier
+    expression !compon GenOp< "$" | "@" > newline* ( Identifier | Character ) |
+    Identifier !member GenOp< "::" | ":::" > newline* Identifier
 }
 
 ArithOp<op> { op }
@@ -105,7 +109,6 @@ LogicOp<op> { op }
 AssignOp<op> { op }
 equalsAssignOp[@name="AssignOp"] { equalSign }
 GenOp<op> { op }
-MemberOp<op> { op }
 
 ifExpr { ifKwd newline* openParen newline* expression newline* closeParen newline* expression ifEnding }
 
@@ -161,15 +164,15 @@ inKwd { kw<"in"> }
 infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | infix6 | infix7| infix8 | infix9 }
 
 @tokens {
-  spaces  { $[\u0009 \u000b\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+ }
-  newline  { $[\r\n\u2028\u2029] }
+  spaces  { $[\u0009 \u000b\u00a0]+ }
+  newline  { $[\r\n] }
   eof { @eof }
 
   identifierChar { @asciiLetter }
 
   Character {
-    '"' ( ![\\\n"] | '\\' '"' )*  '"' |
-    "'" ( ![\\\n'] | "\\" "'" )*  "'"
+    '"' ( ![\\\n\r"] | '\\' '"' )*  '"' |
+    "'" ( ![\\\n\r'] | "\\" "'" )*  "'"
   }
 
   Logical { "TRUE" | "FALSE" }
@@ -186,8 +189,7 @@ infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | inf
   Complex { number "i" }
 
   simpleName {
-    ( identifierChar ) ( identifierChar | @digit | "." | "_" )*  | 
-    ( "." ) ( ( identifierChar | "." | "_" ) ( identifierChar | @digit | "." | "_" )* )?
+    ( identifierChar | "." ) ( ( identifierChar | "." | "_" ) ( identifierChar | @digit | "." | "_" )* )?
   }
 
   backtickName { "`" ![\n]* "`" }
