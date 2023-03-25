@@ -25,14 +25,14 @@ export class RSession {
 
 
         setenv("R_ARCH","x64")
-        setenv("R_DOC_DIR","C:/PROGRA~1/R/R-42~1.2/doc")
-        setenv("R_HOME","C:/PROGRA~1/R/R-42~1.2")
-        setenv("R_INCLUDE_DIR","C:/PROGRA~1/R/R-42~1.2/include")
+        setenv("R_DOC_DIR","C:\\Program Files\\R\\R-4.2.3\\doc")
+        setenv("R_HOME","C:\\Program Files\\R\\R-4.2.3")
+        setenv("R_INCLUDE_DIR","C:\\Program Files\\R\\R-4.2.3\\include")
         setenv("R_RUNTIME","ucrt")
-        setenv("R_SHARE_DIR","C:/PROGRA~1/R/R-42~1.2/share")
+        setenv("R_SHARE_DIR","C:\\Program Files\\R\\R-4.2.3\\share")
 
         
-        setenv("Path","C:\\Program Files\\R\\R-4.2.2\\bin\\x64" + ";" + getenv("Path"))
+        setenv("Path","C:\\Program Files\\R\\R-4.2.3\\bin\\x64" + ";" + getenv("Path"))
 
         //////////////////////////////
 
