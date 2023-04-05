@@ -37,7 +37,7 @@ export type SessionOutputEvent = {
         addedErrorInfos?: ErrorInfoStruct[]
         cellEvalCompleted?: boolean
         outputVersion?: number
-        lineDisplay?: LineDisplayData
+        lineDisplayData?: LineDisplayData
         cellEnv?: Record<string,string>
         docEnvUpdate?: DocEnvUpdateData
         docEvalCompleted?: boolean
@@ -538,7 +538,7 @@ function onConsoleOut(text: string) {
                         else if(msgJson.data.lineId != activeLineId) {
                             throw new Error("Line Display event with line id not equal current event")
                         }
-                        currentEvent.data.lineDisplay = msgJson.data.valList
+                        currentEvent.data.lineDisplayData = msgJson.data.valList
                         break
                     }
                     case "cellEnv": {

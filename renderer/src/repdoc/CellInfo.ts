@@ -1,7 +1,7 @@
 import CellDisplay from "./CellDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
-import { ErrorInfoStruct } from "../session/sessionApi"
+import { ErrorInfoStruct, LineDisplayData, DocEnvUpdateData } from "../session/sessionApi"
 
 const INVALID_VERSION_NUMBER = -1
 
@@ -20,6 +20,8 @@ interface CellInfoParams {
     plots?: string[]
     values?: string[]
     errorInfos?: ErrorInfoStruct[]
+    lineDisplayData?: LineDisplayData | null
+    cellEnv?: Record<string,string>
     outputVersion?: number
 }
 
@@ -52,6 +54,8 @@ export default class CellInfo {
     readonly plots: string[]
     readonly values: string[]
     readonly errorInfos: ErrorInfoStruct[]
+    readonly lineDisplayData: LineDisplayData | null = null
+    readonly cellEnv: Record<string,string> = {}
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
     readonly cellDisplay: CellDisplay
@@ -61,6 +65,9 @@ export default class CellInfo {
 
     readonly lineShading: Decoration | null = null
     readonly pLineShadings: Range<Decoration>[] | null = null
+
+    readonly lineDisplay: Decoration | null = null
+    readonly pLineDisplay: Range<Decoration> | null = null
 
     readonly instanceVersion: number
 
@@ -75,10 +82,11 @@ export default class CellInfo {
 
     private constructor(editorState: EditorState, refCellInfo: CellInfo | null, {from,to,fromLine,toLine,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
-            consoleLines,plots,values,errorInfos,outputVersion
+            consoleLines,plots,values,errorInfos,lineDisplayData,cellEnv,outputVersion
         }: CellInfoParams) {
 
         let displayChanged = false
+        let lineDisplayChanged = false
 
         if(refCellInfo === null) {
             this.id = CellInfo.getId()
@@ -104,10 +112,13 @@ export default class CellInfo {
             this.plots = []
             this.values = []
             this.errorInfos = []
+            if(lineDisplayData !== undefined) this.lineDisplayData = lineDisplayData
+            if(cellEnv != undefined) this.cellEnv = cellEnv
             if(outputVersion !== undefined) this.outputVersion = INVALID_VERSION_NUMBER
 
             this.cellDisplay = new CellDisplay(this)
             displayChanged = true
+            lineDisplayChanged = true
         }
         else {
             //resuse these fields
@@ -158,6 +169,19 @@ export default class CellInfo {
             }
             else {
                 this.errorInfos = refCellInfo!.errorInfos
+            }
+
+            if(lineDisplayData !== undefined) {
+                this.lineDisplayData = lineDisplayData
+            }
+            else {
+                this.lineDisplayData = refCellInfo!.lineDisplayData
+            }
+            if(cellEnv != undefined) {
+                this.cellEnv = cellEnv
+            }
+            else {
+                this.cellEnv = refCellInfo!.cellEnv
             }
 
             this.outputVersion = (outputVersion !== undefined) ? outputVersion! : refCellInfo.outputVersion
