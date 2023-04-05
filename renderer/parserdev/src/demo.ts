@@ -1,4 +1,4 @@
-import { EXAMPLE } from "../../argonaut-lezer-r/src"
+import {rlangsupport} from "../../argonaut-lezer-r/src"
 import { EditorView } from "@codemirror/view"
 import { setup } from "./setup"
 
@@ -16,7 +16,7 @@ window.view = new EditorView({
     extensions: [
         setup,
         images(),
-        EXAMPLE()
+        rlangsupport()
     ],
     parent: document.querySelector("#editorMD")!
 });

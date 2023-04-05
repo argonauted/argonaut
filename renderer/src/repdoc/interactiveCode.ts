@@ -150,7 +150,6 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
 
     let effects: readonly StateEffect<any>[] = transaction.effects
 
-
     for(let i1 = 0; i1 < effects.length; i1++) {
         let effect = effects[i1]
         if(effect.is(sessionOutputEffect)) { 
@@ -163,17 +162,6 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                     let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
                     if(index >= 0) {
                         newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data)
-
-                        //THIS CODE ASSUMES WE WILL ONLY GET ONE UPDATE (change if we can get more)
-                        //update status of later cells
-                        let inputVersion = sessionOutputData.data.outputVersion!
-                        let needsEval = ( sessionOutputData.data.docEvalCompleted || sessionOutputData.data.nextLineIndex1 === undefined ) ? 
-                            newCellInfos.length : 
-                            sessionOutputData.data.nextLineIndex1! - 1 //NOTE - rturn value is 1 based index!!!
-                        for(let i3 = index + 1; i3 < newCellInfos.length; i3++) {
-                            let outputVersion = (i3 < needsEval) ? inputVersion : undefined 
-                            newCellInfos[i3] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[i3],{inputVersion,outputVersion})
-                        }
                     }
                     else {
                         console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
@@ -844,11 +832,16 @@ function issueSessionCommands(docSessionId: string, editorState: EditorState, ac
 
     //send create/update commands for any cell with code dirty beneat the non-command index
     //for(let index = 0; index < nonCommandIndex; index++) {
+    let cellCommandCreated = false
     activeCellInfos.forEach( (cellInfo,index) => {
         if( isCodeDirty(cellInfo) && index < nonCommandIndex ) {
             let {newCellInfo,command} = createAddUpdateAction(editorState,cellInfo,index,docVersion)
             updatedCellInfos.push(newCellInfo)
             commands.push(command) 
+            cellCommandCreated = true
+        }
+        else if(cellCommandCreated) {
+            updatedCellInfos.push(CellInfo.updateCellInfoForInputVersion(editorState,cellInfo,docVersion))
         }
         else {
             updatedCellInfos.push(cellInfo)
@@ -857,7 +850,7 @@ function issueSessionCommands(docSessionId: string, editorState: EditorState, ac
 
     //send commands
     if(commands.length > 0) {
-        sendCommands(docSessionId, commands,docVersion)
+        sendCommands(docSessionId,commands,docVersion)
     }
 
     //return modified cell infos
@@ -891,7 +884,7 @@ function createAddUpdateAction(editorState: EditorState, cellInfo: CellInfo, zer
         command.type = "update"
     }
 
-    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(editorState,cellInfo, docVersion)
+    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(editorState,cellInfo,docVersion)
 
     return {command,newCellInfo}
 }

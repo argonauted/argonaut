@@ -24,6 +24,7 @@ interface CellInfoParams {
 }
 
 interface DisplayStateParams {
+    newStatusUpdate?: boolean
     cellEvalStarted?: boolean
     cellEvalCompleted?: boolean
     addedConsoleLines?: [string,string][]
@@ -271,11 +272,11 @@ export default class CellInfo {
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
     static updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
-        {cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, addedErrorInfos, outputVersion, inputVersion}: DisplayStateParams) {
+        {newStatusUpdate,cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, addedErrorInfos, outputVersion, inputVersion}: DisplayStateParams) {
         
         //output version required if evalStarted or evalCompleted is set
         
-        if(cellEvalStarted === true) {
+        if(newStatusUpdate === true) {
             //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
             cellInfo = new CellInfo(editorState,cellInfo,{consoleLines: [], plots: [], values: []})
         }
@@ -292,18 +293,23 @@ export default class CellInfo {
         }
         else if(addedErrorInfos !== undefined) params.errorInfos = cellInfo.errorInfos.concat(addedErrorInfos)
 
-        params.outputVersion = outputVersion
-        params.inputVersion = inputVersion
+        if(outputVersion !== undefined) params.outputVersion = outputVersion
+        if(inputVersion !== undefined) params.inputVersion = inputVersion
 
         return new CellInfo(editorState,cellInfo,params)
     }
 
     /** This function creates a update cell info for when session commands are sent (to craete or update the cell) */
     static updateCellInfoForCommand(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
-        let modelCode = cellInfo.docCode
-        let modelVersion = cellInfo.docVersion
-        let inputVersion = currentDocVersion
-        return new CellInfo(editorState,cellInfo,{status,modelCode,modelVersion,inputVersion})
+        return new CellInfo(editorState,cellInfo,{
+            modelCode: cellInfo.docCode,
+            modelVersion: cellInfo.docVersion,
+            inputVersion: currentDocVersion
+        })
+    }
+
+    static updateCellInfoForInputVersion(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
+        return new CellInfo(editorState,cellInfo,{inputVersion: currentDocVersion})
     }
 
     //for now we make a dummy id here

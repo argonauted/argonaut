@@ -13,11 +13,23 @@ export type CodeCommand = {
     after?: number
 }
 
+export interface LineDisplayData  {
+    name?: string //this should be union - either name or label+value
+    label?: string
+    value?: any
+}
+
+export interface DocEnvUpdateData {
+    adds?: Record<string,any>
+    drops?: string[]
+}
+
 //event messages to client
 export type SessionOutputEvent = {
     session: string | null,
     lineId: string | null
     data: {
+        newStatusUpdate?: boolean
         cellEvalStarted?: boolean
         addedConsoleLines?: [string,string][]
         addedPlots?: string[]
@@ -25,6 +37,9 @@ export type SessionOutputEvent = {
         addedErrorInfos?: ErrorInfoStruct[]
         cellEvalCompleted?: boolean
         outputVersion?: number
+        lineDisplay?: LineDisplayData
+        cellEnv?: Record<string,string>
+        docEnvUpdate?: DocEnvUpdateData
         docEvalCompleted?: boolean
         nextLineIndex1?: number
     },
@@ -86,6 +101,7 @@ let continueEvents = true
 
 let activeSession: string | null = null
 let activeLineId: string | null = null
+let lastEvaluatedLineId: string | null = null
 let lineActive: boolean = false
 
 let pendingCommand: CommandQueueEntry | null = null
@@ -471,6 +487,7 @@ function onConsoleOut(text: string) {
                     case "evalStart": {
                         activeSession = msgJson.session
                         activeLineId = msgJson.data.lineId
+                        lastEvaluatedLineId = msgJson.data.lineId
                         lineActive = true
         
                         //I ASSUME CURRENT EVENT NOT SET. IS THAT OK?
@@ -478,6 +495,7 @@ function onConsoleOut(text: string) {
 
                         currentEvent = createSessionOutputEvent()
                         sessionOutputEvents.push(currentEvent)
+                        currentEvent.data.newStatusUpdate = true
                         currentEvent.data.cellEvalStarted = true
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
                         break
@@ -503,34 +521,93 @@ function onConsoleOut(text: string) {
                             }
                             currentEvent.data.addedConsoleLines!.push([msgJson.data.msgType,msgJson.data.msg])
                         }
-                        
                         break
                     }
-                    case "docStatus": {
-                        //manage command queue
-                        sessionCommandCompleted(msgJson)
-        
-                        if((msgJson.session !== activeSession)&&(lineActive)) {
+                    case "lineDisplay": {
+                        if(msgJson.session !== activeSession) {
                             //FIGURE OUT WHAT TO DO HERE...
-                            console.error("Session msg Event not equal to active session with line active")
-                            //ALSO, WHAT IF LINE IS NOT ACTIVE? I DON'T THINK WE EXPECT THAT EITHER
-                            //I think we check if line is active because then the activeSession is valid? But if we get a docStatue
-                            //with no active session, what does that mean?
+                            throw new Error("Line Display event with session not equal to active session")
                         }
-
                         if(currentEvent === null) {
+                            activeLineId = msgJson.data.lineId
+                            lineActive = true
                             currentEvent = createSessionOutputEvent()
                             sessionOutputEvents.push(currentEvent)
+                            currentEvent.data.newStatusUpdate = true
+                        }
+                        else if(msgJson.data.lineId != activeLineId) {
+                            throw new Error("Line Display event with line id not equal current event")
+                        }
+                        currentEvent.data.lineDisplay = msgJson.data.valList
+                        break
+                    }
+                    case "cellEnv": {
+                        if(msgJson.session !== activeSession) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            throw new Error("Cell Env event with session not equal to active session")
+                        }
+                        if(currentEvent === null) {
+                            activeLineId = msgJson.data.lineId
+                            lineActive = true
+                            currentEvent = createSessionOutputEvent()
+                            sessionOutputEvents.push(currentEvent)
+                            currentEvent.data.newStatusUpdate = true
+                        }
+                        else if(msgJson.data.lineId != activeLineId) {
+                            throw new Error("Cell Env event with line id not equal current event")
+                        }
+                        currentEvent.data.cellEnv = msgJson.data.varList
+                        break
+                    }
+                    case "docEnv": {
+                        if(msgJson.session !== activeSession) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            throw new Error("Cell Doc Env event with session not equal to active session")
+                        }
+                        if(currentEvent === null) {
+                            activeLineId = msgJson.data.lineId
+                            lineActive = true
+                            currentEvent = createSessionOutputEvent()
+                            sessionOutputEvents.push(currentEvent)
+                            currentEvent.data.newStatusUpdate = true
+                        }
+                        else if(msgJson.data.lineId != activeLineId) {
+                            throw new Error("Cell Doc Env event with line id not equal current event")
+                        }
+                        currentEvent.data.docEnvUpdate = msgJson.data.changes
+                        break
+                    }
+                    case "cellStatus": {
+                        if(msgJson.session !== activeSession) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            throw new Error("Cell Status event with session not equal to active session")
+                        }
+                        if(currentEvent === null) {
+                            activeLineId = msgJson.data.lineId
+                            lineActive = true
+                            currentEvent = createSessionOutputEvent()
+                            sessionOutputEvents.push(currentEvent)
+                            currentEvent.data.newStatusUpdate = true
+                        }
+                        else if(msgJson.data.lineId != activeLineId) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            throw new Error("Cell Status event not equal to active session with line active")
                         }
                         currentEvent.data.cellEvalCompleted = true
                         currentEvent.data.outputVersion = msgJson.data.cmdIndex
-                        currentEvent.data.docEvalCompleted = msgJson.data.evalComplete
-                        if(!msgJson.data.evalComplete) {
-                            currentEvent.data.nextLineIndex1 = msgJson.data.nextLineIndex
+
+                        currentEvent = null
+                        lineActive = false
+                        break
+                    }
+                    case "docStatus": {
+                        if((msgJson.session !== activeSession)&&(lineActive)) {
+                            //FIGURE OUT WHAT TO DO HERE...
+                            throw new Error("Doc Status event not equal to active session with line active")
                         }
 
-                        lineActive = false
-                        currentEvent = null
+                        //manage command queue
+                        sessionCommandCompleted(msgJson)
                         break
                     }
                     case "activeLineStatus": {
@@ -579,10 +656,10 @@ function onConsoleErr(msg: string) {
     }
 }
 
-function createSessionOutputEvent(ignoreLineActive = false): SessionOutputEvent {
+function createSessionOutputEvent(useLastEvaluated = false): SessionOutputEvent {
     return {
         session: activeSession,
-        lineId: (ignoreLineActive || lineActive) ?  activeLineId : null,
+        lineId: useLastEvaluated ? lastEvaluatedLineId : lineActive ? activeLineId : null,
         data: {
         }
     }
@@ -723,8 +800,8 @@ function getEvents() {
                     //     console.log(JSON.stringify(entry))
                     // }
                 }
-                catch(err) {
-                    console.error("Error processing messages!")
+                catch(err: any) {
+                    console.error("Error processing messages: " + err.toString())
                 }
 
                 eventIndex = entry.id
