@@ -197,8 +197,11 @@ export default class CellInfo {
             let className = this.getLineShadingClass()
             if(className !== null) {
                 this.lineShading = Decoration.line({attributes: {class: className}})
-                setLineShading = true
             }
+            else {
+                this.lineShading = null
+            }
+            setLineShading = true
         }
         else if(refCellInfo !== null) {
             this.lineShading = refCellInfo!.lineShading
@@ -212,16 +215,18 @@ export default class CellInfo {
 
         if(setLineShading) {
             this.pLineShadings = []
-            for(let lineNum = this.fromLine; lineNum <= this.toLine; lineNum++) {
-                let lineStartPos = -1
-                if(lineNum == this.fromLine) {
-                    lineStartPos = this.from
+            if(this.lineShading !== null) {
+                for(let lineNum = this.fromLine; lineNum <= this.toLine; lineNum++) {
+                    let lineStartPos = -1
+                    if(lineNum == this.fromLine) {
+                        lineStartPos = this.from
+                    }
+                    else {
+                        //we pass the editor state just so we can read the line start here when there are multiple lines in the cell
+                        lineStartPos = editorState.doc.line(lineNum).from
+                    }
+                    this.pLineShadings.push(this.lineShading!.range(lineStartPos,lineStartPos))
                 }
-                else {
-                    //we pass the editor state just so we can read the line start here when there are multiple lines in the cell
-                    lineStartPos = editorState.doc.line(lineNum).from
-                }
-                this.pLineShadings.push(this.lineShading!.range(lineStartPos,lineStartPos))
             }
         }
     }
@@ -276,7 +281,7 @@ export default class CellInfo {
         
         //output version required if evalStarted or evalCompleted is set
         
-        if(newStatusUpdate === true) {
+        if(cellEvalStarted === true) {
             //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
             cellInfo = new CellInfo(editorState,cellInfo,{consoleLines: [], plots: [], values: []})
         }
