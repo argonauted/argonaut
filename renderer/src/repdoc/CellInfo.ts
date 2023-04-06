@@ -1,7 +1,8 @@
 import CellDisplay from "./CellDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
-import { ErrorInfoStruct, LineDisplayData, DocEnvUpdateData } from "../session/sessionApi"
+import { ErrorInfoStruct, SessionOutputData, LineDisplayData } from "../session/sessionApi"
+import { VarTable, lookupValue } from "./varTable"
 
 const INVALID_VERSION_NUMBER = -1
 
@@ -20,7 +21,7 @@ interface CellInfoParams {
     plots?: string[]
     values?: string[]
     errorInfos?: ErrorInfoStruct[]
-    lineDisplayData?: LineDisplayData | null
+    outputVarInfos?: OutputVarInfo[] | null
     cellEnv?: Record<string,string>
     outputVersion?: number
 }
@@ -35,6 +36,11 @@ interface DisplayStateParams {
     addedErrorInfos?: ErrorInfoStruct[]
     outputVersion?: number
     inputVersion?: number
+}
+
+type OutputVarInfo = {
+    label: string,
+    value: any
 }
 
 export default class CellInfo {
@@ -54,7 +60,7 @@ export default class CellInfo {
     readonly plots: string[]
     readonly values: string[]
     readonly errorInfos: ErrorInfoStruct[]
-    readonly lineDisplayData: LineDisplayData | null = null
+    readonly outputVarInfos: OutputVarInfo[] | null = null
     readonly cellEnv: Record<string,string> = {}
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
@@ -82,7 +88,7 @@ export default class CellInfo {
 
     private constructor(editorState: EditorState, refCellInfo: CellInfo | null, {from,to,fromLine,toLine,
             docCode,modelCode,docVersion,modelVersion,inputVersion,
-            consoleLines,plots,values,errorInfos,lineDisplayData,cellEnv,outputVersion
+            consoleLines,plots,values,errorInfos,outputVarInfos,cellEnv,outputVersion
         }: CellInfoParams) {
 
         let displayChanged = false
@@ -112,13 +118,11 @@ export default class CellInfo {
             this.plots = []
             this.values = []
             this.errorInfos = []
-            if(lineDisplayData !== undefined) this.lineDisplayData = lineDisplayData
             if(cellEnv != undefined) this.cellEnv = cellEnv
             if(outputVersion !== undefined) this.outputVersion = INVALID_VERSION_NUMBER
 
             this.cellDisplay = new CellDisplay(this)
             displayChanged = true
-            lineDisplayChanged = true
         }
         else {
             //resuse these fields
@@ -171,12 +175,6 @@ export default class CellInfo {
                 this.errorInfos = refCellInfo!.errorInfos
             }
 
-            if(lineDisplayData !== undefined) {
-                this.lineDisplayData = lineDisplayData
-            }
-            else {
-                this.lineDisplayData = refCellInfo!.lineDisplayData
-            }
             if(cellEnv != undefined) {
                 this.cellEnv = cellEnv
             }
@@ -186,6 +184,27 @@ export default class CellInfo {
 
             this.outputVersion = (outputVersion !== undefined) ? outputVersion! : refCellInfo.outputVersion
         }
+
+        if(outputVarInfos !== undefined) {
+            this.outputVarInfos = outputVarInfos
+            lineDisplayChanged = true
+        }
+        else if(refCellInfo !== null) {
+            this.outputVarInfos = refCellInfo!.outputVarInfos
+        }
+        else {
+            this.outputVarInfos = null
+        }
+
+        /////////////////////////////////////////////////////////
+        //testing
+        if(lineDisplayChanged) {
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            console.log(`Line ${this.fromLine}: Output Vars Updated to ${ this.outputVarInfos !== null ? JSON.stringify(this.outputVarInfos[0]) : "EMPTY"}`)
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        }
+        //What I want to do is add the output decoration here
+        /////////////////////////////////////////////////////////
 
         //determine the status
         if( this.docVersion > this.modelVersion ) this.status = "code dirty"
@@ -301,7 +320,9 @@ export default class CellInfo {
 
     /** This function creates an updated cell for status and or output (console or plot) changes. */
     static updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
-        {newStatusUpdate,cellEvalStarted, cellEvalCompleted, addedConsoleLines, addedPlots, addedValues, addedErrorInfos, outputVersion, inputVersion}: DisplayStateParams) {
+        {newStatusUpdate, cellEvalStarted, cellEvalCompleted, 
+            addedConsoleLines, addedPlots, addedValues, addedErrorInfos, lineDisplayDatas, 
+            cellEnv, outputVersion}: SessionOutputData, varTable: VarTable) {
         
         //output version required if evalStarted or evalCompleted is set
         
@@ -323,7 +344,29 @@ export default class CellInfo {
         else if(addedErrorInfos !== undefined) params.errorInfos = cellInfo.errorInfos.concat(addedErrorInfos)
 
         if(outputVersion !== undefined) params.outputVersion = outputVersion
-        if(inputVersion !== undefined) params.inputVersion = inputVersion
+        
+        //process the line display data
+        if(lineDisplayDatas !== undefined) {
+            if(lineDisplayDatas === null) {
+                params.outputVarInfos = null
+            }
+            else {
+                params.outputVarInfos =  lineDisplayDatas.map(lineDisplayData => {
+                    let value = (lineDisplayData.lookupKey !== undefined) ?
+                        lookupValue(varTable, lineDisplayData.lookupKey) :
+                        lineDisplayData.value
+
+                    return {
+                        label: lineDisplayData.label,
+                        value
+                    }
+                })
+            }
+        }
+
+        if(cellEnv !== undefined) {
+            params.cellEnv = cellEnv
+        }
 
         return new CellInfo(editorState,cellInfo,params)
     }

@@ -1,4 +1,4 @@
-import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1} from "../session/sessionApi"
+import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
@@ -6,6 +6,7 @@ import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirr
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 import { sessionOutputEffect } from "../editor/sessionEvents"
 import { getSessionId } from "../editor/editorConfig"
+import { VarTable, getEmptyVarTable, getUpdatedVarTable } from "./varTable"
 
 //===============================
 // Repdoc Codemirror Extension
@@ -28,8 +29,6 @@ export const InteractiveCodeField = StateField.define<DocState>({
     },
 })
 
-
-
 export function getDocState(editorState: EditorState) {
     return editorState.field(InteractiveCodeField)
 }
@@ -39,10 +38,10 @@ export function getDocState(editorState: EditorState) {
 // Data Structures
 //===================================
 
-
 export type DocState = {
     docVersion: number
     cellInfos: CellInfo[]
+    varTable: VarTable
     parseTreeCurrent: boolean
     hasParseErrors: boolean
     hasDirtyCells: boolean
@@ -123,7 +122,7 @@ function getCUICodeText(cui: CellUpdateInfo) {
 //===================================
 
 /** This function creates a docState object. */
-function createDocState(cellInfos: CellInfo[],docVersion: number,parseTreeUsed: boolean, hasParseErrors: boolean): DocState {
+function createDocState(cellInfos: CellInfo[], varTable: VarTable, docVersion: number,parseTreeUsed: boolean, hasParseErrors: boolean): DocState {
     let decorations: Range<Decoration>[] = []
     if(cellInfos.length > 0) {
         cellInfos.forEach(cellInfo => cellInfo.pushDecorations(decorations))
@@ -132,6 +131,7 @@ function createDocState(cellInfos: CellInfo[],docVersion: number,parseTreeUsed: 
     return {
         docVersion: docVersion,
         cellInfos: cellInfos,
+        varTable: varTable,
         parseTreeCurrent: parseTreeUsed,
         hasParseErrors: hasParseErrors,
         hasDirtyCells: cellInfos.some(cellInfo => isCodeDirty(cellInfo) ),
@@ -154,17 +154,28 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
         let effect = effects[i1]
         if(effect.is(sessionOutputEffect)) { 
             let newCellInfos = docState.cellInfos.concat()
+            let varTable = docState.varTable
 
             for(let i2 = 0; i2 < effect.value.length; i2++) {
                 //we are doing only one session for now
                 let sessionOutputData = effect.value[i2] as SessionOutputEvent
                 if(sessionOutputData.lineId !== null) {
-                    let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
-                    if(index >= 0) {
-                        newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data)
+                    if(sessionOutputData.data.docEnvUpdate !== undefined) {
+                        varTable = getUpdatedVarTable(varTable, sessionOutputData.data.docEnvUpdate)
+                    }
+
+                    if(sessionOutputData.lineId == PRE_LINE_ID) {
+                        //special case - initialization of document
+                        newCellInfos = docState.cellInfos
                     }
                     else {
-                        console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
+                        let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
+                        if(index >= 0) {
+                            newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data, varTable)
+                        }
+                        else {
+                            console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
+                        }
                     }
                 }
                 else {
@@ -173,7 +184,7 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
                 }
             }
 
-            docState = createDocState(newCellInfos,docState.docVersion,docState.parseTreeCurrent,docState.hasParseErrors)
+            docState = createDocState(newCellInfos,varTable,docState.docVersion,docState.parseTreeCurrent,docState.hasParseErrors)
         }
     }
 
@@ -211,14 +222,15 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
     let docSessionId = getSessionId(editorState)
     let doParseTreeProcess = getProcessParseTree(editorState, transaction, docState) 
     if( (transaction && transaction.docChanged) || doParseTreeProcess ) {
-        let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION 
+        let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION
+        let varTable = (docState !== undefined) ? docState.varTable : getEmptyVarTable() 
         let {cellUpdateInfos,cellsToDelete,hasParseErrors,nonCommandIndex,parseTreeUsed} = getCellUpdateInfo(editorState,transaction,docState,doParseTreeProcess)
         let cellInfos = createCellInfos(editorState,cellUpdateInfos,docVersion)
         setMaxEvalLine1(docSessionId,nonCommandIndex) //note - argument here equals to the last commandIndex - 1, but it is also 1-based rather than 0-based
         if( nonCommandIndex > 0 || cellsToDelete!.length > 0 ) {
             cellInfos = issueSessionCommands(docSessionId, editorState,cellInfos,cellsToDelete,docVersion,nonCommandIndex)
         }
-        return createDocState(cellInfos,docVersion,parseTreeUsed,hasParseErrors)
+        return createDocState(cellInfos,varTable,docVersion,parseTreeUsed,hasParseErrors)
     }
     else {
         if(docState === undefined) throw new Error("Unexpected: doc state misssing") //this shouldn't happen
@@ -232,7 +244,7 @@ function processDocChanges(editorState: EditorState, transaction: Transaction | 
             setMaxEvalLine1(docSessionId, nonCommandIndex) 
             let docVersion = (docState !== undefined) ? docState.docVersion + 1 : INITIAL_DOCUMENT_VERSION
             let cellInfos = issueSessionCommands(docSessionId, editorState,docState.cellInfos,[],docVersion,nonCommandIndex)
-            docState = createDocState(cellInfos,docVersion,docState.parseTreeCurrent,docState.hasParseErrors) 
+            docState = createDocState(cellInfos,docState.varTable,docVersion,docState.parseTreeCurrent,docState.hasParseErrors) 
         }
         return docState!
     }
@@ -615,11 +627,11 @@ function getFinalGapUpdate(endLine: number, prevUpdateInfo: CellUpdateInfo, docT
 }
 
 function getModUpdateInfo(cellInfo: CellInfo, docText: Text,changes: ChangeSet) {
-    let mappedFrom = changes.mapPos(cellInfo.from,1) //"1" means map to the right of insert text at this point
+    let mappedFrom = changes.mapPos(cellInfo.from,-1) 
     let newFromLineObject = docText.lineAt(mappedFrom)
     let newFromLine = newFromLineObject.number
     let newFrom = newFromLineObject.from
-    let mappedTo = changes.mapPos(cellInfo.to,-1) //"-1" means map to the left of insert text at this point
+    let mappedTo = changes.mapPos(cellInfo.to,1)
     let newToLineObject = docText.lineAt(mappedTo)
     let newToLine = newToLineObject.number  
     let newTo = newToLineObject.to

@@ -1,3 +1,4 @@
+import { DocEnvUpdateData } from "../repdoc/varTable" 
 
 const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 
@@ -14,35 +15,35 @@ export type CodeCommand = {
 }
 
 export interface LineDisplayData  {
-    name?: string //this should be union - either name or label+value
-    label?: string
+    label: string
+    lookupKey?: string
     value?: any
 }
 
-export interface DocEnvUpdateData {
-    adds?: Record<string,any>
-    drops?: string[]
+export type SessionOutputData = {
+    newStatusUpdate?: boolean
+    cellEvalStarted?: boolean
+    addedConsoleLines?: [string,string][]
+    addedPlots?: string[]
+    addedValues?: string[]
+    addedErrorInfos?: ErrorInfoStruct[]
+    cellEvalCompleted?: boolean
+    outputVersion?: number
+    lineDisplayDatas?: LineDisplayData[]
+    cellEnv?: Record<string,string>
+    docEnvUpdate?: DocEnvUpdateData
+    docEvalCompleted?: boolean
+    nextLineIndex1?: number
 }
+
+//This is the line ID that is sent corresponding to a dos variable table update before any lines are added
+export const PRE_LINE_ID = ""
 
 //event messages to client
 export type SessionOutputEvent = {
     session: string | null,
     lineId: string | null
-    data: {
-        newStatusUpdate?: boolean
-        cellEvalStarted?: boolean
-        addedConsoleLines?: [string,string][]
-        addedPlots?: string[]
-        addedValues?: string[]
-        addedErrorInfos?: ErrorInfoStruct[]
-        cellEvalCompleted?: boolean
-        outputVersion?: number
-        lineDisplayData?: LineDisplayData
-        cellEnv?: Record<string,string>
-        docEnvUpdate?: DocEnvUpdateData
-        docEvalCompleted?: boolean
-        nextLineIndex1?: number
-    },
+    data: SessionOutputData,
     nextId?: string
 }
 
@@ -538,7 +539,7 @@ function onConsoleOut(text: string) {
                         else if(msgJson.data.lineId != activeLineId) {
                             throw new Error("Line Display event with line id not equal current event")
                         }
-                        currentEvent.data.lineDisplayData = msgJson.data.valList
+                        currentEvent.data.lineDisplayDatas = msgJson.data.valList
                         break
                     }
                     case "cellEnv": {
@@ -574,7 +575,7 @@ function onConsoleOut(text: string) {
                         else if(msgJson.data.lineId != activeLineId) {
                             throw new Error("Cell Doc Env event with line id not equal current event")
                         }
-                        currentEvent.data.docEnvUpdate = msgJson.data.changes
+                        currentEvent.data.docEnvUpdate = msgJson.data //pass the complete structure
                         break
                     }
                     case "cellStatus": {
