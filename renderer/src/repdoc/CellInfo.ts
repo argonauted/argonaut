@@ -1,7 +1,7 @@
 import CellDisplay from "./CellDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
-import { ErrorInfoStruct, SessionOutputData, LineDisplayData } from "../session/sessionApi"
+import { ErrorInfoStruct, SessionOutputData } from "../session/sessionApi"
 import { VarTable, lookupValue } from "./varTable"
 
 const INVALID_VERSION_NUMBER = -1
@@ -26,45 +26,32 @@ interface CellInfoParams {
     outputVersion?: number
 }
 
-interface DisplayStateParams {
-    newStatusUpdate?: boolean
-    cellEvalStarted?: boolean
-    cellEvalCompleted?: boolean
-    addedConsoleLines?: [string,string][]
-    addedPlots?: string[]
-    addedValues?: string[]
-    addedErrorInfos?: ErrorInfoStruct[]
-    outputVersion?: number
-    inputVersion?: number
-}
-
 type OutputVarInfo = {
     label: string,
     value: any
 }
 
 export default class CellInfo {
-    readonly id: string
+    readonly id: string = "INVALID" //this used to be set in the constructor, but typescript doesn't acknowledge the current code
     readonly status: string
-    readonly from: number
-    readonly to: number
-    readonly fromLine: number
-    readonly toLine: number
-    readonly docCode: string
-    readonly docVersion: number
-    readonly modelCode: string | null
+    readonly from: number = 0 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly to: number = 0 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly fromLine: number = 1 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly toLine: number = 1 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly docCode: string = "" //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly docVersion: number = 0 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
+    readonly modelCode: string | null = null
     readonly modelVersion: number = INVALID_VERSION_NUMBER
     readonly inputVersion: number = INVALID_VERSION_NUMBER
 
-    readonly consoleLines: [string,string][]
-    readonly plots: string[]
-    readonly values: string[]
-    readonly errorInfos: ErrorInfoStruct[]
+    readonly consoleLines: [string,string][] = []
+    readonly plots: string[] = []
+    readonly errorInfos: ErrorInfoStruct[] = []
     readonly outputVarInfos: OutputVarInfo[] | null = null
     readonly cellEnv: Record<string,string> = {}
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
-    readonly cellDisplay: CellDisplay
+    readonly cellDisplay: CellDisplay | null = null
 
     readonly outputDisplay: Decoration | null = null
     readonly pOutputDisplay: Range<Decoration> | null = null
@@ -86,156 +73,46 @@ export default class CellInfo {
         } 
     }
 
-    private constructor(editorState: EditorState, refCellInfo: CellInfo | null, {from,to,fromLine,toLine,
-            docCode,modelCode,docVersion,modelVersion,inputVersion,
-            consoleLines,plots,values,errorInfos,outputVarInfos,cellEnv,outputVersion
-        }: CellInfoParams) {
-
-        let displayChanged = false
-        let lineDisplayChanged = false
+    private constructor(editorState: EditorState, refCellInfo: CellInfo | null, cellInfoParams: CellInfoParams) {
 
         if(refCellInfo === null) {
             this.id = CellInfo.getId()
-
-            //must be set for creation
-            this.from = from!
-            this.to = to!
-            this.fromLine = fromLine!,
-            this.toLine = toLine!,
-            this.docCode = docCode!
-
-            if(docVersion == undefined) throw new Error("Unexpected: doc version not set for new cellinfo")
-            this.docVersion = docVersion!
-
-            if(inputVersion !== undefined) this.inputVersion = inputVersion
-
-            this.modelCode = null
-            if(modelVersion !== undefined) this.modelVersion = modelVersion
-
             this.instanceVersion = 1
 
-            this.consoleLines = []
-            this.plots = []
-            this.values = []
-            this.errorInfos = []
-            if(cellEnv != undefined) this.cellEnv = cellEnv
-            if(outputVersion !== undefined) this.outputVersion = INVALID_VERSION_NUMBER
-
-            this.cellDisplay = new CellDisplay(this)
-            displayChanged = true
+            //require
+            //from
+            //fo
+            //fromLine
+            //toLine
+            //docCode
+            //docVersion
+            //if(cellInfoParams.docVersion == undefined) throw new Error("Unexpected: doc version not set for new cellinfo")
         }
         else {
-            //resuse these fields
-            this.id = refCellInfo!.id
-            this.instanceVersion = refCellInfo!.instanceVersion + 1 //assume we move forward only
-            this.cellDisplay = refCellInfo!.cellDisplay
-            this.cellDisplay.setCellInfo(this)
-            
-            this.from = (from !== undefined) ? from! : refCellInfo.from
-            this.to = (to !== undefined) ? to! : refCellInfo.to
-            this.fromLine = (fromLine !== undefined) ? fromLine! : refCellInfo.fromLine
-            this.toLine = (toLine !== undefined) ? toLine! : refCellInfo.toLine
-
-            this.docCode = (docCode !== undefined) ? docCode! : refCellInfo.docCode
-            this.docVersion = (docVersion !== undefined) ? docVersion! : refCellInfo.docVersion
-            this.modelCode = (modelCode !== undefined) ? modelCode! : refCellInfo.modelCode
-            this.modelVersion = (modelVersion !== undefined) ? modelVersion! : refCellInfo.modelVersion
-            this.inputVersion = (inputVersion !== undefined) ? inputVersion! : refCellInfo.inputVersion
-
-
-            if(consoleLines !== undefined) {
-                this.consoleLines = consoleLines
-                displayChanged = true
-            }
-            else {
-                this.consoleLines = refCellInfo!.consoleLines
-            }
-
-            if(plots !== undefined) {
-                this.plots = plots
-                displayChanged = true
-            }
-            else {
-                this.plots = refCellInfo!.plots
-            }
-
-            if(values !== undefined) {
-                this.values = values
-                displayChanged = true
-            }
-            else {
-                this.values = refCellInfo!.values
-            }
-
-            if(errorInfos !== undefined) {
-                this.errorInfos = errorInfos
-                displayChanged = true
-            }
-            else {
-                this.errorInfos = refCellInfo!.errorInfos
-            }
-
-            if(cellEnv != undefined) {
-                this.cellEnv = cellEnv
-            }
-            else {
-                this.cellEnv = refCellInfo!.cellEnv
-            }
-
-            this.outputVersion = (outputVersion !== undefined) ? outputVersion! : refCellInfo.outputVersion
+           Object.assign(this,refCellInfo!)
+           this.instanceVersion = refCellInfo!.instanceVersion + 1
         }
+        Object.assign(this,cellInfoParams)
 
-        if(outputVarInfos !== undefined) {
-            this.outputVarInfos = outputVarInfos
-            lineDisplayChanged = true
-        }
-        else if(refCellInfo !== null) {
-            this.outputVarInfos = refCellInfo!.outputVarInfos
-        }
-        else {
-            this.outputVarInfos = null
-        }
+        this.status = determineStatus(this)
 
-        /////////////////////////////////////////////////////////
-        //testing
-        if(lineDisplayChanged) {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-            console.log(`Line ${this.fromLine}: Output Vars Updated to ${ this.outputVarInfos !== null ? JSON.stringify(this.outputVarInfos[0]) : "EMPTY"}`)
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-        }
-        //What I want to do is add the output decoration here
-        /////////////////////////////////////////////////////////
+        //get change flags
+        let statusChanged = refCellInfo === null ? true : 
+            this.status !== refCellInfo!.status
+        let cellMoved = refCellInfo === null ? true :
+            this.from != refCellInfo!.from ||
+            this.fromLine != refCellInfo!.fromLine ||
+            this.to != refCellInfo!.to ||
+            this.toLine != refCellInfo!.toLine
+        let displayChanged = (cellInfoParams.consoleLines !== undefined || 
+            cellInfoParams.plots !== undefined || 
+            cellInfoParams.errorInfos )
+        let outputVarInfosChanged = cellInfoParams.outputVarInfos !== undefined
 
-        //determine the status
-        if( this.docVersion > this.modelVersion ) this.status = "code dirty"
-        else if( this.inputVersion > this.outputVersion ) this.status = "inputs dirty"
-        else if( this.modelVersion > this.outputVersion ) this.status = "value pending"
-        else this.status = "value clean"
-        let statusChanged = (refCellInfo !== null) ? (this.status != refCellInfo!.status) : true
-        if(statusChanged) displayChanged = true
-
-        if(displayChanged) {
-            this.cellDisplay.update()
-        }
-
-        if(this.cellDisplay.getIsVisible()) {
-            if(displayChanged) {
-                this.outputDisplay = Decoration.widget({
-                    widget: this.cellDisplay,
-                    block: true,
-                    side: 1
-                }) 
-                this.pOutputDisplay = this.outputDisplay!.range(this.to) 
-            }
-            else if(refCellInfo !== undefined) {
-                this.outputDisplay = refCellInfo!.outputDisplay
-                if((this.outputDisplay !== null)&&(this.to != refCellInfo!.to)) this.pOutputDisplay = this.outputDisplay!.range(this.to) 
-                else this.pOutputDisplay = refCellInfo!.pOutputDisplay
-            }
-        }
-
-        //load line shading
-        let setLineShading = false
+        //------------------------------------
+        // handle status change / shading change
+        //------------------------------------
+        let lineShadingChanged = false  //I could detect shading change, instead I just follow the status change
         if( statusChanged ) {
             let className = this.getLineShadingClass()
             if(className !== null) {
@@ -244,19 +121,9 @@ export default class CellInfo {
             else {
                 this.lineShading = null
             }
-            setLineShading = true
+            lineShadingChanged = true
         }
-        else if(refCellInfo !== null) {
-            this.lineShading = refCellInfo!.lineShading
-            if( this.from != refCellInfo!.from || this.docCode != refCellInfo!.docCode ) {
-                if(this.lineShading !== null) setLineShading = true
-            }
-            else {
-                this.pLineShadings = refCellInfo!.pLineShadings
-            }
-        }
-
-        if(setLineShading) {
+        if(lineShadingChanged || cellMoved) {
             this.pLineShadings = []
             if(this.lineShading !== null) {
                 for(let lineNum = this.fromLine; lineNum <= this.toLine; lineNum++) {
@@ -272,6 +139,53 @@ export default class CellInfo {
                 }
             }
         }
+
+        //------------------------------------
+        // handle dispaly change
+        //------------------------------------
+
+        //we probably want to udpate how this is done - but this is from my old code
+        if(this.cellDisplay !== null) this.cellDisplay.setCellInfo(this)
+
+        let outputDisplayChanged = false
+        if(displayChanged) {
+            if(this.cellDisplay == null) {
+                this.cellDisplay = new CellDisplay(this)
+            }
+            this.cellDisplay!.update()
+
+            if(this.cellDisplay!.getIsVisible()) {
+                this.outputDisplay = Decoration.widget({
+                    widget: this.cellDisplay!,
+                    block: true,
+                    side: 1
+                })
+            }
+            else {
+                this.outputDisplay = null
+            }
+            
+            outputDisplayChanged = true
+        }
+
+        if(outputDisplayChanged || cellMoved) {
+            if(this.outputDisplay !== null) {
+                this.pOutputDisplay = this.outputDisplay!.range(this.to) 
+            }
+            else {
+                this.pOutputDisplay = null
+            }
+        }
+
+        //------------------------------------
+        // handle output var info change
+        //------------------------------------
+        if(outputVarInfosChanged) {
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            console.log(`Line ${this.fromLine}: Output Vars Updated to ${ this.outputVarInfos !== null ? JSON.stringify(this.outputVarInfos[0]) : "EMPTY"}`)
+            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        }
+        
     }
 
     needsCreate() {
@@ -335,7 +249,6 @@ export default class CellInfo {
 
         if(addedConsoleLines !== undefined) params.consoleLines = cellInfo.consoleLines.concat(addedConsoleLines)
         if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
-        if(addedValues !== undefined) params.values = cellInfo.values.concat(addedValues)
 
         //error infos are reset on each eval
         if(cellEvalStarted) {
@@ -389,4 +302,12 @@ export default class CellInfo {
     private static getId() {
         return "l" + String(CellInfo.nextId++)
     }
+}
+
+
+function determineStatus(cellInfo: CellInfo) {
+    if( cellInfo.docVersion > cellInfo.modelVersion ) return "code dirty"
+    else if( cellInfo.inputVersion > cellInfo.outputVersion ) return "inputs dirty"
+    else if( cellInfo.modelVersion > cellInfo.outputVersion ) return "value pending"
+    else return "value clean"
 }

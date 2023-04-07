@@ -52,12 +52,11 @@ export default class CellDisplay extends WidgetType {
     }
 
     update() {
-        this.isVisible = (this.cellInfo.errorInfos.length > 0)||(this.cellInfo.consoleLines.length > 0)||(this.cellInfo.plots.length > 0)||(this.cellInfo.values.length > 0)
+        this.isVisible = (this.cellInfo.errorInfos.length > 0)||(this.cellInfo.consoleLines.length > 0)||(this.cellInfo.plots.length > 0)
         this.updateStatus()
         this.updateErrors()
         this.updateConsole()
         this.updatePlots()
-        //this.updateValues()
     }
 
     toDOM() {
