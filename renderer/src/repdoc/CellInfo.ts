@@ -1,4 +1,6 @@
-import CellDisplay from "./CellDisplay"
+import {VarInfo} from "./displayValues"
+import OutputDisplay from "./OutputDisplay"
+import VarDisplay from "./VarDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
 import { ErrorInfoStruct, SessionOutputData } from "../session/sessionApi"
@@ -21,14 +23,9 @@ interface CellInfoParams {
     plots?: string[]
     values?: string[]
     errorInfos?: ErrorInfoStruct[]
-    outputVarInfos?: OutputVarInfo[] | null
+    varInfos?: VarInfo[] | null
     cellEnv?: Record<string,string>
     outputVersion?: number
-}
-
-type OutputVarInfo = {
-    label: string,
-    value: any
 }
 
 export default class CellInfo {
@@ -47,17 +44,20 @@ export default class CellInfo {
     readonly consoleLines: [string,string][] = []
     readonly plots: string[] = []
     readonly errorInfos: ErrorInfoStruct[] = []
-    readonly outputVarInfos: OutputVarInfo[] | null = null
+    readonly varInfos: VarInfo[] | null = null
     readonly cellEnv: Record<string,string> = {}
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
-    readonly cellDisplay: CellDisplay | null = null
+    readonly outputDisplay: OutputDisplay | null = null
+    readonly outputDecoration: Decoration | null = null
+    readonly outputDecorationRng: Range<Decoration> | null = null
 
-    readonly outputDisplay: Decoration | null = null
-    readonly pOutputDisplay: Range<Decoration> | null = null
+    readonly varDisplay: VarDisplay | null = null
+    readonly varDecoration: Decoration | null = null
+    readonly varDecorationRng: Range<Decoration> | null = null
 
     readonly lineShading: Decoration | null = null
-    readonly pLineShadings: Range<Decoration>[] | null = null
+    readonly lineShadingsRng: Range<Decoration>[] | null = null
 
     readonly lineDisplay: Decoration | null = null
     readonly pLineDisplay: Range<Decoration> | null = null
@@ -65,11 +65,14 @@ export default class CellInfo {
     readonly instanceVersion: number
 
     pushDecorations(container: Range<Decoration>[]) {
-        if(this.pLineShadings !== null) {
-            container.push(...this.pLineShadings)
+        if(this.lineShadingsRng !== null) {
+            container.push(...this.lineShadingsRng)
         }
-        if(this.pOutputDisplay != null) {
-            container.push(this.pOutputDisplay)
+        if(this.varDecorationRng != null) {
+            container.push(this.varDecorationRng)
+        }
+        if(this.outputDecorationRng != null) {
+            container.push(this.outputDecorationRng)
         } 
     }
 
@@ -104,10 +107,10 @@ export default class CellInfo {
             this.fromLine != refCellInfo!.fromLine ||
             this.to != refCellInfo!.to ||
             this.toLine != refCellInfo!.toLine
-        let displayChanged = (cellInfoParams.consoleLines !== undefined || 
+        let outputChanged = (cellInfoParams.consoleLines !== undefined || 
             cellInfoParams.plots !== undefined || 
             cellInfoParams.errorInfos )
-        let outputVarInfosChanged = cellInfoParams.outputVarInfos !== undefined
+        let varInfosChanged = cellInfoParams.varInfos !== undefined
 
         //------------------------------------
         // handle status change / shading change
@@ -124,7 +127,7 @@ export default class CellInfo {
             lineShadingChanged = true
         }
         if(lineShadingChanged || cellMoved) {
-            this.pLineShadings = []
+            this.lineShadingsRng = []
             if(this.lineShading !== null) {
                 for(let lineNum = this.fromLine; lineNum <= this.toLine; lineNum++) {
                     let lineStartPos = -1
@@ -135,56 +138,85 @@ export default class CellInfo {
                         //we pass the editor state just so we can read the line start here when there are multiple lines in the cell
                         lineStartPos = editorState.doc.line(lineNum).from
                     }
-                    this.pLineShadings.push(this.lineShading!.range(lineStartPos,lineStartPos))
+                    this.lineShadingsRng.push(this.lineShading!.range(lineStartPos,lineStartPos))
                 }
             }
         }
 
         //------------------------------------
-        // handle dispaly change
+        // handle display change
         //------------------------------------
 
         //we probably want to udpate how this is done - but this is from my old code
-        if(this.cellDisplay !== null) this.cellDisplay.setCellInfo(this)
+        if(this.outputDisplay !== null) this.outputDisplay.setCellInfo(this)
 
         let outputDisplayChanged = false
-        if(displayChanged) {
-            if(this.cellDisplay == null) {
-                this.cellDisplay = new CellDisplay(this)
+        if(outputChanged) {
+            if(this.outputDisplay == null) {
+                this.outputDisplay = new OutputDisplay(this)
             }
-            this.cellDisplay!.update()
+            this.outputDisplay!.update()
 
-            if(this.cellDisplay!.getIsVisible()) {
-                this.outputDisplay = Decoration.widget({
-                    widget: this.cellDisplay!,
+            if(this.outputDisplay!.getIsVisible()) {
+                this.outputDecoration = Decoration.widget({
+                    widget: this.outputDisplay!,
                     block: true,
                     side: 1
                 })
             }
             else {
-                this.outputDisplay = null
+                this.outputDecoration = null
             }
             
             outputDisplayChanged = true
         }
 
         if(outputDisplayChanged || cellMoved) {
-            if(this.outputDisplay !== null) {
-                this.pOutputDisplay = this.outputDisplay!.range(this.to) 
+            if(this.outputDecoration !== null) {
+                this.outputDecorationRng = this.outputDecoration!.range(this.to) 
             }
             else {
-                this.pOutputDisplay = null
+                this.outputDecorationRng = null
             }
         }
 
         //------------------------------------
         // handle output var info change
         //------------------------------------
-        if(outputVarInfosChanged) {
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-            console.log(`Line ${this.fromLine}: Output Vars Updated to ${ this.outputVarInfos !== null ? JSON.stringify(this.outputVarInfos[0]) : "EMPTY"}`)
-            console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        
+        //we probably want to udpate how this is done - but this is from my old code
+        if(this.varDisplay !== null) this.varDisplay.setCellInfo(this)
+
+        let varDisplayChanged = false
+        if(varInfosChanged) {
+            if(this.varDisplay == null) {
+                this.varDisplay = new VarDisplay(this)
+            }
+            this.varDisplay!.update()
+
+            if(this.varDisplay!.getIsVisible()) {
+                this.varDecoration = Decoration.widget({
+                    widget: this.varDisplay!,
+                    block: false,
+                    side: 1
+                })
+            }
+            else {
+                this.varDecoration = null
+            }
+            
+            varDisplayChanged = true
         }
+
+        if(varDisplayChanged || cellMoved) {
+            if(this.varDecoration !== null) {
+                this.varDecorationRng = this.varDecoration!.range(this.to) 
+            }
+            else {
+                this.varDecorationRng = null
+            }
+        }
+
         
     }
 
@@ -261,10 +293,10 @@ export default class CellInfo {
         //process the line display data
         if(lineDisplayDatas !== undefined) {
             if(lineDisplayDatas === null) {
-                params.outputVarInfos = null
+                params.varInfos = null
             }
             else {
-                params.outputVarInfos =  lineDisplayDatas.map(lineDisplayData => {
+                params.varInfos =  lineDisplayDatas.map(lineDisplayData => {
                     let value = (lineDisplayData.lookupKey !== undefined) ?
                         lookupValue(varTable, lineDisplayData.lookupKey) :
                         lineDisplayData.value

@@ -2,7 +2,7 @@ import CellInfo from "./CellInfo"
 import {WidgetType} from "@codemirror/view"
 import { ErrorInfoStruct } from "../session/sessionApi"
 
-export default class CellDisplay extends WidgetType {
+export default class OutputDisplay extends WidgetType {
     cellInfo: CellInfo
     activeStatus: string = ""
     activeErrorCount: number = 0
@@ -31,7 +31,7 @@ export default class CellDisplay extends WidgetType {
     }
 
     destroy(dom: HTMLElement): void {
-        console.log("CELL DISPLAY DESTROYED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        console.log("OUTPUT DISPLAY DESTROYED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         this.element = null
         this.consoleElement = null
         this.plotsElement = null
@@ -42,7 +42,7 @@ export default class CellDisplay extends WidgetType {
         this.cellInfo = cellInfo
     }
 
-    eq(other: CellDisplay) { 
+    eq(other: OutputDisplay) { 
         return (other.cellInfo.id == this.cellInfo.id) &&
                 (other.cellInfo.instanceVersion == this.cellInfo.instanceVersion)
     }
