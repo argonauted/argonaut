@@ -11,11 +11,15 @@ export interface ShortInfo {
 }
 
 export function getShortInfo(valueJson: any): ShortInfo {
+    if(valueJson === null) {
+        return {typeInfo: "", valueInfo: "null", addedInfo: ""}
+    }
+
     switch(valueJson.type) {
         case "double":
         case "integer":
         case "character":
-        case "boolean":
+        case "logical":
         case "complex":
             return getVectorShortInfo(valueJson)
 
@@ -80,10 +84,10 @@ function getListShortInfo(valueJson: any) {
 
 function getListNamesString(valueJson: any) {
     if(valueJson.names === undefined) {
-        return "<unnamed list>"
+        return "unnamed list"
     }
     else { 
-        let names = valueJson.names.forEach((name: string) => name !== "" ? name : "<unnamed>" ).join("  ")
+        let names = valueJson.names.map((name: string) => name !== "" ? name : "(no name)" ).join("  ")
         if(names.length < valueJson.len) names += "..."
         return "names = " + names
     }
