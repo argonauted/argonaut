@@ -1,139 +1,165 @@
-import {syntaxTree} from "@codemirror/language"
-import {CompletionContext} from "@codemirror/autocomplete"
-import { SyntaxNode, NodeType } from "@lezer/common"
-import { getAutocomplete } from "../session/sessionApi"
-import { getDocState } from "./interactiveCode"
-import { getSessionId } from "../editor/editorConfig"
-import CellInfo from "./CellInfo"
+import { syntaxTree } from "@codemirror/language"
+import { CompletionContext } from "@codemirror/autocomplete"
+import { SyntaxNode } from "@lezer/common"
+import { getDocState, DocState, isContentCell } from "./interactiveCode"
 
-import {RLanguage} from "../../argonaut-lezer-r/src"
+import { RLanguage } from "../../argonaut-lezer-r/src"
 
 // const tagOptions = [
 //   "constructor", "deprecated", "link", "param", "returns", "type"
 // ].map(tag => ({label: "@" + tag, type: "keyword"}))
 
 export const rsessioncompletions = RLanguage.data.of({
-    autocomplete: getSessionAutocompletions
+  autocomplete: getSessionAutocompletions
 });
 
+const ALT_COMPLETION_PARENTS = ["DollarExpr"]
+const KEYWORDS = ["if","else","for","in","while","repeat","function"]
+const KEYWORD_TYPES = new Array(KEYWORDS.length).fill("keyword")
+
 function getSessionAutocompletions(context: CompletionContext) {
-  let containingNode: SyntaxNode | null = syntaxTree(context.state).resolve(context.pos,-1)
-  if(containingNode !== null) {
-    //check this is a symbol of interest
-    if(isMemberSymbol(containingNode.type)) {
-      let parentNode = containingNode.parent
-      //check the chain up to the bineary expression we are checking
-      if(parentNode !== null && parentNode.name == "MemberOp") {
-        let grandParentNode = parentNode.parent
-        if(grandParentNode !== null && grandParentNode.name == "BinaryExpr") {
-          //get the expression/identifier on which member is called and get the complete line up the the current point
-          let calleeNode = grandParentNode.firstChild
-          if(calleeNode !== null) {
-            let calleeText = context.state.doc.sliceString(calleeNode.from,calleeNode.to)
-            let cellNode = getCellNode(grandParentNode)
-            if(cellNode !== null) {
-              let lineText = context.state.doc.sliceString(cellNode.from,containingNode.to)
+  let containingNode: SyntaxNode | null = syntaxTree(context.state).resolve(context.pos, -1)
+  if (containingNode !== null) {
+    //check for trigger token
+    let nodeName = containingNode.name
+    let parentNode = containingNode.parent
+    let docState = getDocState(context.state)
 
-              /////////////////////////////////////////////
-              let sessionId = getSessionId(context.state)
+    //else check for general identifier
+    if (nodeName == "$") {
+      if(parentNode !== null && parentNode.name == "DollarExpr") {
+        //provide the $ autocomplete
+        let completions = getDollarExprCompletions(parentNode!,context,docState)
+        if(completions !== null) return completions
 
-              let docState = getDocState(context.state)
-              let prevCellNode = cellNode.prevSibling
-              let prevLineId: string | null = null
-              if(prevCellNode !== null) {
-                let prevCellInfo = docState.cellInfos.find(cellInfo => cellInfo.from == prevCellNode!.from)
-                //DOH! I probably need to check if the new editor state matches the doc state 
-                if(prevCellInfo !== undefined) {
-                  if(isUpToDate(prevCellInfo)) {
-                    prevLineId = prevCellInfo!.id
-                  }
-                  else {
-                    //don't call autocomplete because the prev line is not up to date
-                    return null
-                  }
-                }
-                else {
-                  //no autocomplete - prev line not found
-                  return null
-                }
-              } 
-              else {
-                //use NULL for prev line id
-              }
+      }
+    }
 
-              /////////////////////////////////////////////////
-              //check autocomplete here!
-              return getAutocompleteResult(sessionId,prevLineId,calleeText,lineText,containingNode.to)
-            }
-          }
+    // if (nodeName == "(") {
+    //   if(parentNode !== null && parentNode.name == "StdCall") {
+    //     //provide the function call info!
+    //   }
+    // }
+    
+    if (nodeName == "Identifier") {
+      let nodeLen = containingNode.to - containingNode.from
+      if(nodeLen == 1 && parentNode !== null && ALT_COMPLETION_PARENTS.indexOf(parentNode.name) < 0) {
+        //use general var names
+        let completions = getIdentifierCompletions(parentNode!,context,docState)
+        if(completions !== null) return completions
+
+      }
+    }
+
+  }
+  return null
+}
+
+
+function getDollarExprCompletions(dollarExprNode: SyntaxNode, context: CompletionContext, docState: DocState) {
+  //get the caller value
+  //read the name from the caller value
+  //make a list of options for autocomplete
+
+
+  let startPos = context.pos
+  if(dollarExprNode !== null) {
+    let callerValue = getCallerValue(dollarExprNode!, context, docState)
+    if(callerValue !== null) {
+      let nameList = getListNames(callerValue!)
+      if(nameList !== null) {
+        startPos
+        return makeWordListResponse(nameList!,"property",startPos)
+      }
+    }
+  }
+  return null
+}
+
+function getCallerValue(exprNode: SyntaxNode, context: CompletionContext, docState: DocState): any | null {
+  let callerNode = exprNode.firstChild
+  let cellNode = exprNode.parent
+  //for now only process an identifier
+  if(callerNode !== null && callerNode.name == "Identifier" && cellNode !== null) {
+
+    let varName = context.state.doc.sliceString(callerNode.from,callerNode.to)
+    let prevCellInfo = getPrevCellInfo(cellNode,context, docState)
+    if(prevCellInfo !== null && prevCellInfo!.isUpToDate()) {
+      let cellEnv = prevCellInfo!.cellEnv
+      let versionedVarName = cellEnv[varName]
+      if(versionedVarName !== undefined) {
+        let varTable = docState.varTable
+        let varValue = varTable.table[versionedVarName]
+        if(varValue !== undefined) {
+          return varValue
         }
       }
     }
   }
   return null
-  // if (nodeBefore.name != "BlockComment" ||
-  //     context.state.sliceDoc(nodeBefore.from, nodeBefore.from + 3) != "/**")
-  //   return null
-  // let textBefore = context.state.sliceDoc(nodeBefore.from, context.pos)
-  // let tagBefore = /@\w*$/.exec(textBefore)
-  // if (!tagBefore && !context.explicit) return null
-  // return {
-  //   from: tagBefore ? nodeBefore.from + tagBefore.index : context.pos,
-  //   options: tagOptions,
-  //   validFor: /^(@\w*)?$/
-  // }
 }
 
-function isUpToDate(cellInfo: CellInfo) {
-  return ( cellInfo.modelVersion >= cellInfo.docVersion &&
-    cellInfo.outputVersion >= cellInfo.docVersion && 
-    cellInfo.outputVersion >= cellInfo.inputVersion )
+function getPrevCellInfo(cellNode: SyntaxNode, context: CompletionContext, docState: DocState) {
+  let prevCellNode = cellNode.prevSibling
+  if (prevCellNode !== null) {
+    let prevCellInfo = docState.cellInfos.find(cellInfo => cellInfo.from == prevCellNode!.from)
+    //DOH! I probably need to check if the new editor state matches the doc state 
+    if (prevCellInfo !== undefined) {
+      return prevCellInfo
+    }
+  }
+  return null
 }
 
-function getAutocompleteResult(docSessionId: string, prevLineId: string | null, calleeText: string, lineText: string, memberStartPosition: number) {
-  console.log(`Check autocomplete: callee: ${calleeText}, line: ${lineText}`)
-  return getAutocomplete(docSessionId,prevLineId!,calleeText,lineText).then( (data: any) => {
-    if(data !== null && data.data !== null && data.data.result !== null && data.data.result.results !== null && data.data.result.results.length > 0) {
-      let formattedOptions = data.data.result.results.map( (option: string) => {
-        return {label: option, type: "Identifier"}
-      })
+/** This gets the names from a list-type object */
+function getListNames(callerValue: any): string[] | null {
+  if(callerValue.type == "list" && callerValue.names !== undefined) {
+    return callerValue.names.filter( (name: string) => name !== "" )
+  }
+  else if(callerValue.type == "data.frame" && callerValue.colNames !== undefined) {
+    return callerValue.colNames.filter( (name: string) => name !== "" )
+  }
+  return null
+}
 
-      return {
-        from: memberStartPosition,
-        options: formattedOptions,
-        validFor: /^(@\w*)?$/
-      }
-    }
-    else {
-      return null
-    }
+/** This makees a autocompletion word list
+ * - valueList - the string values
+ * - valueTypeInfo - this is either a single type or an array of types matching the value list
+ * - startPos - where the identifier starts
+ */
+function makeWordListResponse(valueList: string[], valueTypeInfo: string | string[], startPos: number) {
+  let wordOptions = valueList.map( (value: string, index: number) => {
+    let valueType = Array.isArray(valueTypeInfo) ? valueTypeInfo[index] : valueTypeInfo
+    return {label: value, type: valueType}
   })
-  // return Promise.resolve({
-  //   from: memberStartPosition,
-  //   options: [
-  //     {label: "a", type: "something"},
-  //     {label: "bb", type: "something"},
-  //     {label: "ccc", type: "something"}
-  //   ],
-  //   validFor: /^(@\w*)?$/
-  // })
-}
-
-function isMemberSymbol(nodeType: NodeType) {
-  return (nodeType.name == "$" || nodeType.name == "@" || nodeType.name == "::" || nodeType.name == ":::")
+  return {
+    from: startPos,
+    options: wordOptions,
+    validFor: /^(\w)$/
+  }
 }
 
 
-function isCell(nodeType: NodeType) {
-  return nodeType.name == "Cell" || nodeType.name == "EndCell"  || nodeType.name == "EmptyCell" || nodeType.name == "EmptyEnd" //the last two will not happen here becoase of the resolve statement
-}
+//----------------------
+// General Identifiers
+//----------------------
 
-function getCellNode(node: SyntaxNode | null) {
-  while(node !== null) {
-    if(isCell(node.type)) {
-      return node
+function getIdentifierCompletions(identifierNode: SyntaxNode, context: CompletionContext, docState:DocState) {
+  let cellNode: SyntaxNode | null = identifierNode
+  while(cellNode !== null && !isContentCell(cellNode.name)) {
+    cellNode = cellNode.parent
+  }
+  if(cellNode !== null) {
+    let prevCellInfo = getPrevCellInfo(cellNode,context,docState)
+    if(prevCellInfo !== null && prevCellInfo!.isUpToDate()) {
+      let varNames = Object.keys(prevCellInfo.cellEnv)
+      let varTypes = new Array(varNames.length).fill("variable")
+
+      let wordList = varNames.concat(KEYWORDS)
+      let typeList = varTypes.concat(KEYWORD_TYPES)
+
+      return makeWordListResponse(wordList,typeList,identifierNode.from)
     }
-    node = node.parent
   }
   return null
 }

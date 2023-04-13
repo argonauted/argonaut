@@ -228,6 +228,10 @@ export default class CellInfo {
         return (this.modelCode != null)
     }
 
+    isUpToDate() {
+        return this.status == "value clean"
+    }
+
     //=================================
     // Private Functions
     //=================================

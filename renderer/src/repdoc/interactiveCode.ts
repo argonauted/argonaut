@@ -1,6 +1,7 @@
 import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
+import { SyntaxNode } from "@lezer/common"
 import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
@@ -32,6 +33,20 @@ export const InteractiveCodeField = StateField.define<DocState>({
 export function getDocState(editorState: EditorState) {
     return editorState.field(InteractiveCodeField)
 }
+
+export function isContentCell(nodeName: string) {
+    return nodeName == "Cell" || nodeName == "EndCell"
+}
+
+export function isEmptyCell(nodeName: string) {
+    return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
+}
+
+function isUpToDate(cellInfo: CellInfo) {
+    return (cellInfo.modelVersion >= cellInfo.docVersion &&
+      cellInfo.outputVersion >= cellInfo.docVersion &&
+      cellInfo.outputVersion >= cellInfo.inputVersion)
+  }
 
 
 //===================================
@@ -385,10 +400,6 @@ function isCodeDirty(cellInfo: CellInfo) {
     return ( cellInfo.status == "code dirty" )
 }
 
-function isEmptyCell(nodeName: string) {
-    return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
-}
-
 function actionIsAnEdit(action: Action) {
     return action == Action.create || action == Action.update || action == Action.delete
 }
@@ -692,7 +703,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
     //and craete new cell infos
     syntaxTree(editorState).iterate({
         enter: (node) => {
-            console.log("Entering node " + node.name)
+            //console.log("Entering node " + node.name)
 
             //once we reach a parse error, stop processing the tree
             if( parseErrorInfo.hasError ) return
@@ -794,7 +805,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
             }
         },
         leave: node => {
-            console.log("Leaving node " + node.name)
+            //console.log("Leaving node " + node.name)
         }
     })
 
