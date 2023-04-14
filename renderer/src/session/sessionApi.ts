@@ -402,12 +402,12 @@ function evaluateAnySessionUpdates() {
 
 function sessionCommandSendFailed(e: any) {
     
-    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY 1) Error in sending command: " + e.toString()),0)
     disableSessionCommands("Send Failed - Recovery Implementation needed")
 }
 
 function sessionCommandErrorResponse(msg: string) {
-    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY 2) Error in sending command: " + msg),0)
     disableSessionCommands("Session failure response - Recovery Implementation needed")
 }
             

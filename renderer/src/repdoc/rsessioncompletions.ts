@@ -78,7 +78,7 @@ function getDollarExprCompletions(dollarExprNode: SyntaxNode, context: Completio
 
 function getCallerValue(exprNode: SyntaxNode, context: CompletionContext, docState: DocState): any | null {
   let callerNode = exprNode.firstChild
-  let cellNode = exprNode.parent
+  let cellNode = getParentCellNode(exprNode)
   //for now only process an identifier
   if(callerNode !== null && callerNode.name == "Identifier" && cellNode !== null) {
 
@@ -139,16 +139,21 @@ function makeWordListResponse(valueList: string[], valueTypeInfo: string | strin
   }
 }
 
+/** This function gets the parent cell for a content node (it assumes the cell is not an empty cell) */
+function getParentCellNode(node: SyntaxNode) {
+  let cellNode: SyntaxNode | null = node
+  while(cellNode !== null && !isContentCell(cellNode.name)) {
+    cellNode = cellNode.parent
+  }
+  return cellNode
+}
 
 //----------------------
 // General Identifiers
 //----------------------
 
 function getIdentifierCompletions(identifierNode: SyntaxNode, context: CompletionContext, docState:DocState) {
-  let cellNode: SyntaxNode | null = identifierNode
-  while(cellNode !== null && !isContentCell(cellNode.name)) {
-    cellNode = cellNode.parent
-  }
+  let cellNode = getParentCellNode(identifierNode)
   if(cellNode !== null) {
     let prevCellInfo = getPrevCellInfo(cellNode,context,docState)
     if(prevCellInfo !== null && prevCellInfo!.isUpToDate()) {
