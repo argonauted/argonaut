@@ -181,6 +181,19 @@ export function clearMaxEvalLine1(docSessionId: string) {
 }
 
 //---------------------------
+// TESTING
+//---------------------------
+
+export function sendDirectCommand(codeText: string, onResponse: ((arg0: any) => void), onError: ((arg0: any) => void)) {
+    let cmd: SessionRequestWrapper = {
+        scope: "rpc",
+        method: "execute_r_code",
+        params: [codeText]
+    } 
+    sendCommand(cmd,onResponse,onError)
+}
+
+//---------------------------
 // Commands
 //---------------------------
 
