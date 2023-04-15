@@ -703,7 +703,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
     //and craete new cell infos
     syntaxTree(editorState).iterate({
         enter: (node) => {
-            //console.log("Entering node " + node.name)
+            console.log("Entering node " + node.name)
 
             //once we reach a parse error, stop processing the tree
             if( parseErrorInfo.hasError ) return
@@ -805,7 +805,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
             }
         },
         leave: node => {
-            //console.log("Leaving node " + node.name)
+            console.log("Leaving node " + node.name)
         }
     })
 
