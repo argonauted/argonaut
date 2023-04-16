@@ -42,6 +42,10 @@ export function isEmptyCell(nodeName: string) {
     return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
 }
 
+export function isCell(nodeName: string) {
+    return nodeName == "Cell" || nodeName == "EndCell" || nodeName == "EmptyCell" || nodeName == "EmptyEnd"
+}
+
 function isUpToDate(cellInfo: CellInfo) {
     return (cellInfo.modelVersion >= cellInfo.docVersion &&
       cellInfo.outputVersion >= cellInfo.docVersion &&

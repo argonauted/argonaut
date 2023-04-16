@@ -1,9 +1,9 @@
 import { syntaxTree } from "@codemirror/language"
 import { CompletionContext } from "@codemirror/autocomplete"
 import { SyntaxNode } from "@lezer/common"
-import { getDocState, DocState, isContentCell } from "./interactiveCode"
-import { EditorView, Tooltip, hoverTooltip } from "@codemirror/view"
-import { EditorState } from "@codemirror/state"
+import { getDocState, DocState, isContentCell, isCell } from "./interactiveCode"
+import { EditorView, Tooltip, hoverTooltip, showTooltip } from "@codemirror/view"
+import { EditorState, StateField } from "@codemirror/state"
 
 import { RLanguage } from "../../argonaut-lezer-r/src"
 
@@ -47,21 +47,21 @@ function getSessionAutocompletions(context: CompletionContext) {
             let nodeLen = containingNode.to - containingNode.from
             if (nodeLen == 1 && parentNode !== null && ALT_COMPLETION_PARENTS.indexOf(parentNode.name) < 0) {
                 //use general var names
-                let completions = getIdentifierCompletions(parentNode!, context, docState)
+                let completions = getIdentifierCompletions(containingNode!, context, docState)
                 if (completions !== null) return completions
 
             }
         }
 
     }
-    return null
+    return undefined
 }
 
 
 function getDollarExprCompletions(dollarExprNode: SyntaxNode, context: CompletionContext, docState: DocState) {
     let startPos = context.pos
     if (dollarExprNode !== null) {
-        let callerValue = getCallerValue(dollarExprNode!, context, docState)
+        let callerValue = getCallerValue(dollarExprNode!, context.state, docState)
         if (callerValue !== null) {
             let nameList = getListNames(callerValue!)
             if (nameList !== null) {
@@ -86,8 +86,14 @@ function makeWordListResponse(valueList: string[], valueTypeInfo: string | strin
     return {
         from: startPos,
         options: wordOptions,
-        validFor: /^(\w)$/
+        //validFor: /^[a-zA-Z][.0-9a-zA-Z]*$|^\.([\.a-zA-Z][\.0-9a-zA-Z]*)?$/ 
     }
+
+    // this is checking if it is in a word: /^(\w)$/
+
+    //note add detail and info:
+    //detail could be the type and other into (appears in dropdown entry)
+    //info could be a description (is an extension of dropdown entry)
 }
 
 //----------------------
@@ -121,11 +127,14 @@ function getIdentifierCompletions(identifierNode: SyntaxNode, context: Completio
 // Helper Functions
 //========================================================
 
-function getCallerValue(exprNode: SyntaxNode, context: CompletionContext, docState: DocState): any | null {
+/** This function can be called to get the caller value of a expression node
+ * for cases where the caller is the first node in the expression node.
+ */
+function getCallerValue(exprNode: SyntaxNode, state: EditorState, docState: DocState): any | null {
     let callerNode = exprNode.firstChild
     //for now only process an identifier
     if (callerNode !== null && callerNode.name == "Identifier" ) {
-        let varName = context.state.doc.sliceString(callerNode.from, callerNode.to)
+        let varName = state.doc.sliceString(callerNode.from, callerNode.to)
         return getVarValueForCell(varName, callerNode, docState)
     }
     return null
@@ -207,6 +216,103 @@ function getChildIndex(childNode: SyntaxNode) {
         }
     }
     return -1
+}
+
+//========================================================
+// Cursor Tooltip
+//========================================================
+
+type TooltipInfo = {
+    name: string
+    line: number
+    tooltip: Tooltip
+} 
+
+export function cursorTooltip() {
+    return [cursorTooltipField, cursorTooltipBaseTheme]
+}
+
+const cursorTooltipBaseTheme = EditorView.baseTheme({
+    ".cm-tooltip.cm-tooltip-cursor": {
+        backgroundColor: "#66b",
+        color: "white",
+        border: "none",
+        padding: "2px 7px",
+        borderRadius: "4px",
+        "& .cm-tooltip-arrow:before": {
+            borderTopColor: "#66b"
+        },
+        "& .cm-tooltip-arrow:after": {
+            borderTopColor: "transparent"
+        }
+    }
+});
+
+const cursorTooltipField = StateField.define<TooltipInfo | null>({
+    create(state: EditorState) {
+        return null 
+    },
+
+    update(tooltipInfo, tr) {
+        if (tr.docChanged || tr.selection) {
+            return getCursorTooltip(tooltipInfo,tr.state)
+        }
+        else {
+            return tooltipInfo
+        }
+    },
+
+    provide: f => showTooltip.computeN([f], state => {
+        let tooltipInfo = state.field(f)
+        return tooltipInfo ? [tooltipInfo.tooltip] : []
+    })
+})
+
+function getCursorTooltip(tooltipInfo: TooltipInfo | null, state: EditorState): TooltipInfo | null {
+    if(state.selection.main.empty) {
+        let pos = state.selection.main.head
+        let node: SyntaxNode | null = syntaxTree(state).resolve(pos, -1)
+        while(node !== null && !isCell(node.name)) {
+            if(node.name == "StdCall") {
+                return getFuncSigTooltipInfo(node,tooltipInfo,state)
+            }
+            node = node.parent
+        }
+    }
+    return null
+}
+
+function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo | null, state: EditorState) {
+    let calleeNode = stdCallNode.firstChild
+    //for now just do identifiers
+    if(calleeNode !== null && calleeNode.name == "Identifier") {
+        let name = state.doc.sliceString(calleeNode.from,calleeNode.to)
+        let line = state.doc.lineAt(calleeNode.to).number
+        if(tooltipInfo !== null && tooltipInfo.name == name && tooltipInfo.line == line) {
+            //keep same tooltip
+            return tooltipInfo
+        }
+
+        //new tooltip
+        let result = getIdentifierNodeValue(calleeNode, state)
+        if(result !== null && result.valueData.type == "function") {
+            let tooltip =  {
+                pos: calleeNode.to,
+                above: true,
+                strictSide: true,
+                arrow: false,
+                create: () => {
+                    let dom = document.createElement("div")
+                    dom.className = "cm-tooltip-cursor"
+                    dom.textContent = JSON.stringify(result!.valueData)
+                    return { dom }
+                }
+            }
+
+            return { name, line, tooltip } 
+        }
+    }
+    return null
 }
 
 //========================================================
