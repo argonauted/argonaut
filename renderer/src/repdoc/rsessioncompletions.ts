@@ -4,6 +4,7 @@ import { SyntaxNode } from "@lezer/common"
 import { getDocState, DocState, isContentCell, isCell } from "./interactiveCode"
 import { EditorView, Tooltip, hoverTooltip, showTooltip } from "@codemirror/view"
 import { EditorState, StateField } from "@codemirror/state"
+import { addEventListener } from "../session/sessionApi"
 
 import { RLanguage } from "../../argonaut-lezer-r/src"
 
@@ -14,12 +15,43 @@ import { RLanguage } from "../../argonaut-lezer-r/src"
 export const rsessioncompletions = RLanguage.data.of({
     autocomplete: getSessionAutocompletions
 });
+export const rsessioncompletions2 = RLanguage.data.of({
+    autocomplete: getSessionAutocompletions2
+});
 
 const ALT_COMPLETION_PARENTS = ["DollarExpr"]
 const KEYWORDS = ["if", "else", "for", "in", "while", "repeat", "function"]
 const KEYWORD_TYPES = new Array(KEYWORDS.length).fill("keyword")
 
+let libVarData: any[] = []
+let libCompletionVarNames: string[] = []
+let libCompletionVarTypes: string[] = []
+//let libFunctionMap: Record<string,string> = {}  //NOT USED NOW!
+
+let savedContext: CompletionContext | null
+let savedData: any | null
+
+function getSessionAutocompletions2(context: CompletionContext) {
+    if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) {
+        savedContext = null
+        
+        if(savedData && savedData.type == "Identifier") {
+if(libCompletionVarNames.length == 0) return undefined
+
+            //return makeWordListResponse(KEYWORDS, KEYWORD_TYPES, savedData.from)
+            return makeWordListResponse(libCompletionVarNames, libCompletionVarTypes, savedData.from)
+        }
+    }
+    else {
+        return undefined
+    }
+}
+
 function getSessionAutocompletions(context: CompletionContext) {
+    //saving text
+    savedContext = context
+    savedData = null
+
     let containingNode: SyntaxNode | null = syntaxTree(context.state).resolve(context.pos, -1)
     if (containingNode !== null) {
         //check for trigger token
@@ -44,6 +76,15 @@ function getSessionAutocompletions(context: CompletionContext) {
         // }
 
         if (nodeName == "Identifier") {
+
+            //===============
+            //test
+            savedData = {
+                type: "Identifier",
+                from: containingNode!.from
+            }
+            //===============
+
             let nodeLen = containingNode.to - containingNode.from
             if (nodeLen == 1 && parentNode !== null && ALT_COMPLETION_PARENTS.indexOf(parentNode.name) < 0) {
                 //use general var names
@@ -86,7 +127,7 @@ function makeWordListResponse(valueList: string[], valueTypeInfo: string | strin
     return {
         from: startPos,
         options: wordOptions,
-        //validFor: /^[a-zA-Z][.0-9a-zA-Z]*$|^\.([\.a-zA-Z][\.0-9a-zA-Z]*)?$/ 
+        validFor: /^[a-zA-Z][.0-9a-zA-Z]*$|^\.([\.a-zA-Z][\.0-9a-zA-Z]*)?$/ 
     }
 
     // this is checking if it is in a word: /^(\w)$/
@@ -113,10 +154,11 @@ function getIdentifierCompletions(identifierNode: SyntaxNode, context: Completio
                 let varNames = Object.keys(prevCellInfo.cellEnv)
                 let varTypes = new Array(varNames.length).fill("variable")
 
-                let wordList = varNames.concat(KEYWORDS)
-                let typeList = varTypes.concat(KEYWORD_TYPES)
+                return makeWordListResponse(varNames, varTypes, identifierNode.from)
 
-                return makeWordListResponse(wordList, typeList, identifierNode.from)
+                //let wordList = varNames.concat(KEYWORDS)
+                //let typeList = varTypes.concat(KEYWORD_TYPES)
+                //return makeWordListResponse(wordList, typeList, identifierNode.from)
             }
         }
     }
@@ -149,7 +191,7 @@ function getParentCellNode(node: SyntaxNode) {
     return cellNode
 }
 
-function getVarValueForCell(varName: string, cellOffspringNode: SyntaxNode, docState: DocState, fromInput=true): any {
+function getVarValueForCell(varName: string, cellOffspringNode: SyntaxNode, docState: DocState, fromInput=true, functionOnly=false): any {
     let cellNode = getParentCellNode(cellOffspringNode)
     if(cellNode !== null) {
         let lookupNode = fromInput ? getPrevCellNode(cellNode) : cellNode
@@ -162,13 +204,22 @@ function getVarValueForCell(varName: string, cellOffspringNode: SyntaxNode, docS
                 if (versionedVarName !== undefined) {
                     let varTable = docState.varTable
                     let varValue = varTable.table[versionedVarName]
-                    if (varValue !== undefined) {
+                    if (varValue !== undefined && (!functionOnly || varValue.type == "function")) {
                         return varValue
                     }
+                }
+
+                /////////////////////////////////////////////////////////
+                //try global
+                /////////////////////////////////////////////////////////
+                for(let i=0; i< libVarData.length; i++) {
+                    let varValue = libVarData[i].var[varName]
+                    if(varValue != undefined && (!functionOnly || varValue.type == "function")) return varValue
                 }
             }
         }
     }
+
     return null
 }
 
@@ -227,6 +278,7 @@ type TooltipInfo = {
     line: number
     tooltip: Tooltip
 } 
+
 
 export function cursorTooltip() {
     return [cursorTooltipField, cursorTooltipBaseTheme]
@@ -294,7 +346,9 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
         }
 
         //new tooltip
-        let result = getIdentifierNodeValue(calleeNode, state)
+        let fromInput = true
+        let functionOnly = true
+        let result = getIdentifierNodeValue(calleeNode, state, fromInput, functionOnly)
         if(result !== null && result.valueData.type == "function") {
             let tooltip =  {
                 pos: calleeNode.to,
@@ -304,7 +358,7 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
                 create: () => {
                     let dom = document.createElement("div")
                     dom.className = "cm-tooltip-cursor"
-                    dom.textContent = JSON.stringify(result!.valueData)
+                    dom.textContent = result!.name + ": " + result!.valueData.signature
                     return { dom }
                 }
             }
@@ -319,13 +373,16 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
 // Hover Tooltip
 //========================================================
 
+
 export const identifierHover = hoverTooltip((view: EditorView, pos: number, side: 1|-1) => {
     let containingNode: SyntaxNode | null = syntaxTree(view.state).resolve(pos, side)
     if (containingNode !== null) {
         let nodeName = containingNode.name
         if (nodeName == "Identifier") {
             //use general var names
-            let result = getIdentifierNodeValue(containingNode, view.state)
+            let fromInput = true //FIX THIS!!!
+            let functionOnly = false //is this oko?
+            let result = getIdentifierNodeValue(containingNode, view.state, fromInput, functionOnly)
             if(result !== null) {
                 return getTooltipInfo(result.name, result.valueData, containingNode.from, containingNode.to)
             }
@@ -348,30 +405,30 @@ function getTooltipInfo(varName: string, value: any, startPos: number, endPos: n
   }
 }
 
-function getIdentifierNodeValue(identifierNode: SyntaxNode, state: EditorState) {
+function getIdentifierNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput: boolean, functionOnly: boolean) {
     let parentNode = identifierNode.parent
     if(parentNode !== null) {
         let lookupFunc = parentToValueFuncMap[parentNode.name]
         if(lookupFunc) {
-            return lookupFunc(identifierNode,state)
+            return lookupFunc(identifierNode,state,fromInput,functionOnly)
         } 
     }
     return null
 }
 
-type ValueLookupFunction = (identifierNode: SyntaxNode, state: EditorState) => {name: string, valueData: any} | null
+type ValueLookupFunction = (identifierNode: SyntaxNode, state: EditorState, fromInput: boolean, functionOnly: boolean) => {name: string, valueData: any} | null
 
-function getValueExprIdentifier(identifierNode: SyntaxNode, state: EditorState) {
+function getValueExprIdentifier(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
     let name = state.doc.sliceString(identifierNode.from,identifierNode.to)
     let docState = getDocState(state)
-    let valueData: any = getVarValueForCell(name, identifierNode, docState)
+    let valueData: any = getVarValueForCell(name, identifierNode, docState, fromInput, functionOnly)
     if(valueData != null) {
         return {name, valueData}
     }
     return null
 }
 
-function valueForArgValueParent(identifierNode: SyntaxNode, state: EditorState) {
+function valueForArgValueParent(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
     let childIndex = getChildIndex(identifierNode)
     if(childIndex == 0) {
         if(identifierNode.nextSibling !== null) {
@@ -383,7 +440,7 @@ function valueForArgValueParent(identifierNode: SyntaxNode, state: EditorState) 
         return null
     } 
     
-    return getValueExprIdentifier(identifierNode,state)
+    return getValueExprIdentifier(identifierNode,state,fromInput,functionOnly)
 }
 
 const parentToValueFuncMap: Record<string,ValueLookupFunction> = {
@@ -413,3 +470,30 @@ const parentToValueFuncMap: Record<string,ValueLookupFunction> = {
 
 
 
+//========================================
+// library data test
+//========================================
+function processEnvData(eventName: string, data: any) {
+
+    libVarData = data
+
+    libCompletionVarNames = []
+    libCompletionVarTypes = []
+    // libFunctionMap = {}
+    data.forEach( (packageData:any) => {
+        var keys = Object.keys(packageData.var)
+        let pkgVarNames = keys.filter( (name: string) => !name.startsWith("."))
+        let pkgVarTypes = pkgVarNames.map( (name: string) => packageData.var[name].type == "function" ? "function" : "variable" )
+        libCompletionVarNames = libCompletionVarNames.concat(pkgVarNames)
+        libCompletionVarTypes = libCompletionVarTypes.concat(pkgVarTypes)
+
+        //get function list for cursor tooltip
+        // let libFunctionNames = pkgVarNames.filter( (name: string, index: number) => pkgVarTypes[index] == "function")
+        // libFunctionNames.forEach( (functionName: string) => {
+        //     let signature = packageData.var[functionName].signature
+        //     if(!libFunctionMap[functionName]) libFunctionMap[functionName] = signature
+        // })
+    })
+}
+
+addEventListener("envData", processEnvData)

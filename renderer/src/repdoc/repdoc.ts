@@ -2,7 +2,7 @@ import {EditorView} from "@codemirror/view"
 import type { Extension} from '@codemirror/state'
 
 import { repdoclint } from './repdoclint'
-import { rsessioncompletions, identifierHover, cursorTooltip } from "./rsessioncompletions"
+import { rsessioncompletions, identifierHover, cursorTooltip, rsessioncompletions2 } from "./rsessioncompletions"
 
 import { InteractiveCodeField } from "./interactiveCode"
 
@@ -36,6 +36,7 @@ export const repdoc = (): Extension => {
         InteractiveCodeField,
         repdoclint,
         rsessioncompletions,
+        rsessioncompletions2,
         cursorTooltip(),
         identifierHover
     ]

@@ -53,7 +53,7 @@ export type ErrorInfoStruct = {
     msg: string
 }
 
-export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
+export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | any  /* DOH! fix this*/ |
                            null /* initComplete */
   
 /** This is the format used in the sendCommand function for a RSession request. */
@@ -184,14 +184,27 @@ export function clearMaxEvalLine1(docSessionId: string) {
 // TESTING
 //---------------------------
 
-export function sendDirectCommand(codeText: string, onResponse: ((arg0: any) => void), onError: ((arg0: any) => void)) {
-    let cmd: SessionRequestWrapper = {
-        scope: "rpc",
-        method: "execute_r_code",
-        params: [codeText]
-    } 
-    sendCommand(cmd,onResponse,onError)
+async function testOnInit() {
+    try {
+        let result = await sendDirectCommand("loadLibEnvVars()");
+        let envData = JSON.parse(JSON.parse(result.data.result))
+        dispatch("envData", envData)
+    }
+    catch(err: any) {
+        if(err) {
+            if(err.stack) console.error(err.stack)
+            else console.error(err.toString())
+        }
+        else {
+            console.error("Error loading env data")
+        }
+    }
 }
+
+export function sendDirectCommand(codeText: string): Promise<any> {
+    return window.rSessionApi.sendRpcRequest('rpc','execute_r_code',[codeText])
+}
+
 
 //---------------------------
 // Commands
@@ -752,6 +765,9 @@ function initRepdocSequence() {
                     //initComplete = true
                     enableSessionCommands()
                     dispatch("initComplete",null)
+
+
+                    setTimeout(testOnInit,0)
                 }
             })
         }
