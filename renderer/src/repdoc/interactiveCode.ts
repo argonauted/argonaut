@@ -1,7 +1,6 @@
 import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
-import { SyntaxNode } from "@lezer/common"
 import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'

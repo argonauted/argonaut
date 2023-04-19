@@ -2,7 +2,9 @@ import {EditorView} from "@codemirror/view"
 import type { Extension} from '@codemirror/state'
 
 import { repdoclint } from './repdoclint'
-import { rsessioncompletions, identifierHover, cursorTooltip, rsessioncompletions2 } from "./rsessioncompletions"
+import { maincompletions, packagecompletions, keywordcompletions, cleanupExtension } from "./repdoccompletions"
+import { repdocHoverTooltip } from "./repdocHoverTooltip"
+import { cursorTooltip } from "./cursorTooltip"
 
 import { InteractiveCodeField } from "./interactiveCode"
 
@@ -35,9 +37,11 @@ export const repdoc = (): Extension => {
         baseTheme,
         InteractiveCodeField,
         repdoclint,
-        rsessioncompletions,
-        rsessioncompletions2,
+        maincompletions,
+        packagecompletions,
+        keywordcompletions,
         cursorTooltip(),
-        identifierHover
+        repdocHoverTooltip,
+        cleanupExtension
     ]
 }

@@ -53,12 +53,12 @@ Identifier {
 
 cellPattern { (expression  ";" !exprterm)* expression ";"? !exprterm }
 
-EmptyCell { () }
+EmptyCell[group="cell"] { () }
 emptyLine { EmptyCell newline }
-Cell { cellPattern }
+Cell[group="cell"] { cellPattern }
 line { Cell newline emptyLine* !exprterm }
-EndCell { cellPattern eof}
-EmptyEnd { eof }
+EndCell[group="cell"] { cellPattern eof}
+EmptyEnd[group="cell"] { eof }
 
 BEmptyCell { () }
 bEmptyLine { BEmptyCell newline }
