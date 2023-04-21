@@ -186,9 +186,15 @@ export function clearMaxEvalLine1(docSessionId: string) {
 
 async function testOnInit() {
     try {
-        let result = await sendDirectCommand("loadLibEnvVars()");
-        let envData = JSON.parse(JSON.parse(result.data.result))
-        dispatch("envData", envData)
+        //let result = await sendDirectCommand("loadLibEnvVars()")
+        //let envData = JSON.parse(JSON.parse(result.data.result))
+        //dispatch("envData", envData)
+
+        //KLUDGE FOR TESTING
+        let result1 = await sendDirectCommand("search()")
+        let fullList = JSON.parse("[" + result1.data.result.substring(2,result1.data.result.length-1) + "]")
+        let libList = fullList.slice(1)
+        getLib(libList,0)
     }
     catch(err: any) {
         if(err) {
@@ -199,6 +205,29 @@ async function testOnInit() {
             console.error("Error loading env data")
         }
     }
+}
+
+//KLUDGE FOR TESTING
+function getLib(libList: string[], index: number) {
+    let pkgName = libList[index]
+    sendDirectCommand(`loadNamedLibEnvVars("${pkgName}")`).then(libResult => {
+        try {
+            if(libResult.data.result) {
+                let pkgData = JSON.parse(JSON.parse(libResult.data.result))
+                if(pkgData) {
+                    dispatch("pkgData",pkgData)
+                }
+            }
+        }
+        catch(err: any) {
+            console.log("Error loading data for package " + pkgName)
+            if(err.stack) console.error(err.stack)
+        }
+
+        if(index < libList.length - 1) {
+            getLib(libList,index+1)
+        }
+    }).catch(err => console.log("Error loading env data!"))
 }
 
 export function sendDirectCommand(codeText: string): Promise<any> {

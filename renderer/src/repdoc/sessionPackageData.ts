@@ -37,4 +37,23 @@ function processEnvData(eventName: string, data: any) {
     })
 }
 
-addEventListener("envData", processEnvData)
+function addPkgData(eventName: string, pkgData: any) {
+
+    libVarData.push(pkgData)
+
+    var keys = Object.keys(pkgData.var)
+    let pkgVarNames = keys.filter( (name: string) => !name.startsWith("."))
+    let pkgVarTypes = pkgVarNames.map( (name: string) => pkgData.var[name].fmt == "function" ? "function" : "variable" )
+    libCompletionVarNames = libCompletionVarNames.concat(pkgVarNames)
+    libCompletionVarTypes = libCompletionVarTypes.concat(pkgVarTypes)
+
+    //get function list for cursor tooltip
+    // let libFunctionNames = pkgVarNames.filter( (name: string, index: number) => pkgVarTypes[index] == "function")
+    // libFunctionNames.forEach( (functionName: string) => {
+    //     let signature = packageData.var[functionName].signature
+    //     if(!libFunctionMap[functionName]) libFunctionMap[functionName] = signature
+    // })
+}
+
+//addEventListener("envData", processEnvData)
+addEventListener("pkgData", addPkgData)

@@ -176,10 +176,10 @@ function getGlblIdentComps(identifierNode: SyntaxNode, context: CompletionContex
 
 /** This gets the names from a list-type object */
 export function getListNames(callerValue: any): string[] | null {
-    if (callerValue.type == "list" && callerValue.names !== undefined) {
+    if (callerValue.fmt == "list" && callerValue.names !== undefined) {
         return callerValue.names.filter((name: string) => name !== "")
     }
-    else if (callerValue.type == "data.frame" && callerValue.colNames !== undefined) {
+    else if (callerValue.fmt == "data.frame" && callerValue.colNames !== undefined) {
         return callerValue.colNames.filter((name: string) => name !== "")
     }
     return null

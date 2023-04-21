@@ -84,7 +84,7 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
         let fromInput = true
         let functionOnly = true
         let result = getIdentifierNodeValue(calleeNode, state, fromInput, functionOnly)
-        if(result !== null && result.valueData.type == "function") {
+        if(result !== null && result.valueData.fmt == "function") {
             let tooltip =  {
                 pos: calleeNode.from,
                 above: true,
@@ -93,7 +93,7 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
                 create: () => {
                     let dom = document.createElement("div")
                     dom.className = "cm-tooltip-cursor"
-                    dom.textContent = result!.name + ": " + result!.valueData.signature
+                    dom.textContent = result!.name + result!.valueData.paramList
                     return { dom }
                 }
             }

@@ -15,12 +15,8 @@ export function getShortInfo(valueJson: any): ShortInfo {
         return {typeInfo: "", valueInfo: "null", addedInfo: ""}
     }
 
-    switch(valueJson.type) {
-        case "double":
-        case "integer":
-        case "character":
-        case "logical":
-        case "complex":
+    switch(valueJson.fmt) {
+        case "vector":
             return getVectorShortInfo(valueJson)
 
         case "factor":
@@ -39,16 +35,25 @@ export function getShortInfo(valueJson: any): ShortInfo {
         case "data.frame":
             return getDataFrameShortInfo(valueJson)
 
-        case "array":
-        case "Atomic Type":
-        case "Recursive Type":
+        case "atomic":
+        case "recursive":
         default:
             return getOtherShortInfo(valueJson)
     }
 }
 
+function getSerializedClass(valueJson: any) {
+    if(valueJson.class) return valueJson.class
+    else if(valueJson.fmt == "vector") {
+        return valueJson.type
+    }
+    else {
+        return valueJson.fmt
+    }
+}
+
 function getVectorShortInfo(valueJson: any) {
-    let typeInfo = `${valueJson.type}[${valueJson.len}]`
+    let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
     let valueInfo = valueJson.data.join("  ")
     if(valueJson.data.length < valueJson.len) {
         valueInfo += "..."
@@ -57,13 +62,13 @@ function getVectorShortInfo(valueJson: any) {
 }
 
 function getArrayShortInfo(valueJson: any) {
-    let typeInfo = `${valueJson.type} ${valueJson.atom}[${valueJson.dim.join(", ")}]`
+    let typeInfo = `${getSerializedClass(valueJson)} ${valueJson.atom}[${valueJson.dim.join(", ")}]`
     let valueInfo = ""
     return {typeInfo,valueInfo,addedInfo: ""}
 }
 
 function getFactorShortInfo(valueJson: any) {
-    let typeInfo = `${valueJson.type}[${valueJson.len}]`
+    let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
     let valueInfo = valueJson.data.join("  ")
     if(valueJson.data.length < valueJson.len) {
         valueInfo += "..."
@@ -76,7 +81,7 @@ function getFactorShortInfo(valueJson: any) {
 }
 
 function getListShortInfo(valueJson: any) {
-    let typeInfo = `${valueJson.type}[${valueJson.len}]`
+    let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
     let valueInfo = ""
     let addedInfo = getListNamesString(valueJson)
     return {typeInfo,valueInfo,addedInfo}
@@ -94,7 +99,7 @@ function getListNamesString(valueJson: any) {
 }
 
 function getDataFrameShortInfo(valueJson: any) {
-    let typeInfo = `data.frame[${valueJson.dim.join(", ")}]`
+    let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.dim.join(", ")}]`
     let valueInfo = ""
     let addedInfo = getDataFrameNamesString(valueJson)
     return {typeInfo,valueInfo,addedInfo}
@@ -112,10 +117,10 @@ function getDataFrameNamesString(valueJson: any) {
 }
 
 function getFunctionShortInfo(valueJson: any) {
-    return {typeInfo: valueJson.signature, valueInfo: "", addedInfo: ""}
+    return {typeInfo: `function${valueJson.paramList}`, valueInfo: "", addedInfo: ""}
 }
 
 function getOtherShortInfo(valueJson: any) {
-    return { typeInfo: valueJson.type, valueInfo: "", addedInfo: "" }
+    return { typeInfo: valueJson.class, valueInfo: "", addedInfo: "" }
 }
 

@@ -64,7 +64,7 @@ export function getVarValueForCell(varName: string, cellOffspringNode: SyntaxNod
             //look up value from packages
             for(let i=0; i< libVarData.length; i++) {
                 let varValue = libVarData[i].var[varName]
-                if(varValue != undefined && (!functionOnly || varValue.type == "function")) {
+                if(varValue != undefined && (!functionOnly || varValue.fmt == "function")) {
                     return varValue
                 }
             }
@@ -81,7 +81,7 @@ export function getCellEnvValue(varName: string, cellInfo: CellInfo, docState: D
     if (versionedVarName !== undefined) {
         let varTable = docState.varTable
         let varValue = varTable.table[versionedVarName]
-        if (varValue !== undefined && (!functionOnly || varValue.type == "function")) {
+        if (varValue !== undefined && (!functionOnly || varValue.fmt == "function")) {
             return varValue
         }
     }
