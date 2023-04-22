@@ -36,7 +36,7 @@
 
 expression {
   literal | Identifier | 
-  UnaryExpr | BinaryExpr | 
+  UnaryExpr | BinaryExpr | AssignExpr |
   DollarExpr | NamespaceExpr | SlotExpr | BrckExpr | DblBrckExpr |
   ParenExpr  | Block |
   IfExpr | RepeatExpr | WhileExpr | ForExpr |
@@ -94,24 +94,25 @@ BinaryExpr {
     expression !comp CompOp< "<" | ">" | ">=" | "<=" | "==" | "!=" > newline* expression |
     expression !and LogicOp< "&" | "&&" > newline* expression |
     expression !or LogicOp< "|" | "||" > newline* expression |
-    expression !lassign AssignOp< "<-" | "<<-" > newline* expression |
-    expression !rassign AssignOp< "->" | "->>" > newline* expression |
-    expression !eqassign equalsAssignOp newline* expression |
     expression !frmla GenOp< "~" > newline* expression
 }
 
 ArithOp<op> { op }
 CompOp<op> { op }
 LogicOp<op> { op }
-AssignOp<op> { op }
-equalsAssignOp[@name="AssignOp"] { equalSign }
 GenOp<op> { op }
+
+AssignExpr {
+  expression !lassign ( "<-" | "<<-" ) newline* expression |
+  expression !rassign ( "->" | "->>" ) newline* expression |
+  expression !eqassign equalSign newline* expression
+}
 
 DollarExpr { expression !child "$" newline* ( Identifier | Character ) }
 NamespaceExpr { Identifier !nmspc ( "::" | ":::" ) newline* Identifier }
 SlotExpr { expression !child "@" newline* ( Identifier | Character ) }
-BrckExpr { expression newline* !subset openBrack newline* ArgList closeBrack }
-DblBrckExpr { expression newline* !subset openDBrack newline* ArgList closeDBrack }
+BrckExpr { expression newline* !subset openBrack newline* SubsetArgList closeBrack }
+DblBrckExpr { expression newline* !subset openDBrack newline* SubsetArgList closeDBrack }
 
 IfExpr { ifKwd newline* openParen newline* expression newline* closeParen newline* expression ifEnding }
 
@@ -131,6 +132,12 @@ labeledArgValue[@name="ArgValue",@dynamicPrecedence=1] { Identifier ~args newlin
 argValue { EmptyArg | plainArgValue | labeledArgValue }
 ArgList { 
   argValue ( "," newline* argValue )*
+}
+SubsetEmptyArg { () }
+SubsetArgValue { expression ~args newline*  }
+subsetArgValue { SubsetEmptyArg | SubsetArgValue } 
+SubsetArgList {
+  subsetArgValue ( "," newline* subsetArgValue )*
 }
 
 StdCall { expression newline* !funcall openParen newline* ArgList closeParen }

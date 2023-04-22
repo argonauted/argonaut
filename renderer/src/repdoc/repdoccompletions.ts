@@ -3,7 +3,7 @@ import { CompletionContext } from "@codemirror/autocomplete"
 import { SyntaxNode } from "@lezer/common"
 import { getDocState, DocState } from "./interactiveCode"
 import { StateField } from "@codemirror/state"
-import { getCellInfo, getPrevCellNode, getParentCellNode, getChildIndex, getCallerValue } from "./nodeValueUtils"
+import { getCellInfo, getPrevCellNode, getAssociatedCellNode, getChildIndex, getCallerValue } from "./nodeValueUtils"
 import { libCompletionVarNames, libCompletionVarTypes } from "./sessionPackageData"
 
 import { RLanguage } from "../../argonaut-lezer-r/src"
@@ -57,6 +57,7 @@ function getMainCompletions(context: CompletionContext) {
          let docState = getDocState(context.state)
  
          //dollar expression child name completion
+         //THIS IS NOT CORRECT - the get chidl index part needs to be fixed.
          if( parentNode !== null && (nodeName == "DollarExpr" || parentNode.name == "DollarExpr") && getChildIndex(containingNode) == 1 ) {
             let dollarExprNode = containingNode.name == "DollarExpr" ? containingNode : parentNode
             let completions = getDollarExprCompletions(dollarExprNode!, context, docState)
@@ -151,7 +152,7 @@ function makeWordListResponse(valueList: string[], valueTypeInfo: string | strin
 //----------------------
 
 function getGlblIdentComps(identifierNode: SyntaxNode, context: CompletionContext, docState: DocState) {
-    let cellNode = getParentCellNode(identifierNode)
+    let cellNode = getAssociatedCellNode(identifierNode)
     if (cellNode !== null) {
         //We only need to consider inputs. We don't predict outputs yet
         //if we have a LHS context completion, we might want different results?
