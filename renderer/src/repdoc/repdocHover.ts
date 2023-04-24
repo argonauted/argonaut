@@ -1,14 +1,16 @@
+/** This extension provides hover functionality for the editor. */
+
 import { syntaxTree } from "@codemirror/language"
 import { SyntaxNode } from "@lezer/common"
 import { EditorView, Tooltip, hoverTooltip } from "@codemirror/view"
-import { getIdentifierNodeValue } from "./nodeValueUtils"
+import { getIdentifierNodeValue } from "./nodeValues"
 
 //========================================================
 // Hover Tooltip
 //========================================================
 
 
-export const repdocHoverTooltip = hoverTooltip((view: EditorView, pos: number, side: 1|-1) => {
+export const repdocHover = hoverTooltip((view: EditorView, pos: number, side: 1|-1) => {
     let containingNode: SyntaxNode | null = syntaxTree(view.state).resolve(pos, side)
     if (containingNode !== null) {
         let nodeName = containingNode.name

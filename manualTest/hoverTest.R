@@ -47,4 +47,38 @@ if(x == 10) y else z
 ##top level ident
 lst
 
+##==================
+## child block cases
+##==================
+
+if(TRUE) {
+  aa1 <- 100
+  bb1 <- aa1 + 1
+  bb1 <- 300
+}
+
+{
+  aa2 <- 100
+  bb2 <- aa2 + 1
+  bb2 <- 300
+}
+
+aa3 <- 0
+while(aa3 < 10) {
+  aa3 <- aa3 + 1
+}
+
+dd4 <- 1
+foo <- function(aa4,bb4=2*aa4,...) {
+  dd4 <- dd4 + 1
+  cc4 <- bb4 + aa4 + dd4
+}
+dd4 <- foo(10)
+
+
+
+
+
+
+
 

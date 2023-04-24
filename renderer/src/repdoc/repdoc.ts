@@ -1,12 +1,14 @@
+/** This is the main file for the extensions that implements the repdoc functionality. */
+
 import {EditorView} from "@codemirror/view"
 import type { Extension} from '@codemirror/state'
 
-import { repdoclint } from './repdoclint'
-import { maincompletions, packagecompletions, keywordcompletions, cleanupExtension } from "./repdoccompletions"
-import { repdocHoverTooltip } from "./repdocHoverTooltip"
-import { cursorTooltip } from "./cursorTooltip"
+import { repdocLint } from './repdocLint'
+import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./repdocCompletions"
+import { repdocHover } from "./repdocHover"
+import { repdocCursorContext } from "./repdocCursorContext"
 
-import { InteractiveCodeField } from "./interactiveCode"
+import { repdocState } from "./repdocState"
 
 //===================================
 // Theme
@@ -35,13 +37,13 @@ const baseTheme = EditorView.baseTheme({
 export const repdoc = (): Extension => {
     return [
         baseTheme,
-        InteractiveCodeField,
-        repdoclint,
-        maincompletions,
-        packagecompletions,
-        keywordcompletions,
-        cursorTooltip(),
-        repdocHoverTooltip,
+        repdocState,
+        repdocLint,
+        mainCompletions,
+        packageCompletions,
+        keywordCompletions,
+        repdocCursorContext(),
+        repdocHover,
         cleanupExtension
     ]
 }

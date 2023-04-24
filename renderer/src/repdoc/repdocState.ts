@@ -1,3 +1,5 @@
+/** This file holds the repdocState extension, which manages the repdoc State, bridging the editor with the R session.  */
+
 import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
@@ -6,13 +8,13 @@ import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirr
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
 import { sessionOutputEffect } from "../editor/sessionEvents"
 import { getSessionId } from "../editor/editorConfig"
-import { VarTable, getEmptyVarTable, getUpdatedVarTable } from "./varTable"
+import { VarTable, getEmptyVarTable, getUpdatedVarTable } from "./sessionValues"
 
 //===============================
 // Repdoc Codemirror Extension
 //===============================
 
-export const InteractiveCodeField = StateField.define<DocState>({
+export const repdocState = StateField.define<DocState>({
     create(editorState) {
         return processDocChanges(editorState)
     },
@@ -30,7 +32,7 @@ export const InteractiveCodeField = StateField.define<DocState>({
 })
 
 export function getDocState(editorState: EditorState) {
-    return editorState.field(InteractiveCodeField)
+    return editorState.field(repdocState)
 }
 
 export function isContentCell(nodeName: string) {

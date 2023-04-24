@@ -1,3 +1,6 @@
+/** This file contains a class to give the DOM element for a cell output display, which displays essentially
+ * the console output for a cell inline with the document. */
+
 import CellInfo from "./CellInfo"
 import {WidgetType} from "@codemirror/view"
 import { ErrorInfoStruct } from "../session/sessionApi"

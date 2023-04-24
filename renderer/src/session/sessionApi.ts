@@ -1,4 +1,4 @@
-import { DocEnvUpdateData } from "../repdoc/varTable" 
+import { DocEnvUpdateData } from "../repdoc/sessionValues" 
 
 const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 

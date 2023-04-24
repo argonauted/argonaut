@@ -60,14 +60,14 @@ line { Cell newline emptyLine* !exprterm }
 EndCell[group="cell"] { cellPattern eof}
 EmptyEnd[group="cell"] { eof }
 
-BEmptyCell { () }
+BEmptyCell[group="cell"] { () }
 bEmptyLine { BEmptyCell newline }
-BCell { cellPattern }
+BCell[group="cell"] { cellPattern }
 bLine { BCell newline bEmptyLine* !exprterm }
-BEndCell { cellPattern closeBrace}
-BEmptyEnd { closeBrace }
+BEndCell[group="cell"] { cellPattern closeBrace}
+BEmptyEnd[group="cell"] { closeBrace }
 bStart { openBrace ( bEmptyLine | bLine) }
-BEmptyBlock { openBrace closeBrace }
+BEmptyBlock[group="cell"] { openBrace closeBrace }
 
 @top Script { emptyLine* line* ( EndCell | EmptyEnd )  }
 

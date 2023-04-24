@@ -1,10 +1,12 @@
+/** This file contains a class which manages the state for a cell object. */
+
 import {VarInfo} from "./displayValues"
 import OutputDisplay from "./OutputDisplay"
 import VarDisplay from "./VarDisplay"
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
 import { ErrorInfoStruct, SessionOutputData } from "../session/sessionApi"
-import { VarTable, lookupValue } from "./varTable"
+import { VarTable, CellEnv, EMPTY_CELL_ENV, lookupDocValue } from "./sessionValues"
 
 const INVALID_VERSION_NUMBER = -1
 
@@ -24,7 +26,7 @@ interface CellInfoParams {
     values?: string[]
     errorInfos?: ErrorInfoStruct[]
     varInfos?: VarInfo[] | null
-    cellEnv?: Record<string,string>
+    cellEnv?: CellEnv
     outputVersion?: number
 }
 
@@ -45,7 +47,7 @@ export default class CellInfo {
     readonly plots: string[] = []
     readonly errorInfos: ErrorInfoStruct[] = []
     readonly varInfos: VarInfo[] | null = null
-    readonly cellEnv: Record<string,string> = {}
+    readonly cellEnv: CellEnv = EMPTY_CELL_ENV
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
     readonly outputDisplay: OutputDisplay | null = null
@@ -302,7 +304,7 @@ export default class CellInfo {
             else {
                 params.varInfos =  lineDisplayDatas.map(lineDisplayData => {
                     let value = (lineDisplayData.lookupKey !== undefined) ?
-                        lookupValue(varTable, lineDisplayData.lookupKey) :
+                        lookupDocValue(lineDisplayData.lookupKey, varTable) :
                         lineDisplayData.value
 
                     return {

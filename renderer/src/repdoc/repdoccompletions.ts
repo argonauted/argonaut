@@ -1,9 +1,10 @@
+/** This file holds the code completions extensions for repdoc */
+
 import { syntaxTree } from "@codemirror/language"
 import { CompletionContext } from "@codemirror/autocomplete"
 import { SyntaxNode } from "@lezer/common"
-import { getDocState, DocState } from "./interactiveCode"
 import { StateField } from "@codemirror/state"
-import { getCellInfo, getPrevCellNode, getAssociatedCellNode, getChildIndex, getCallerValue } from "./nodeValueUtils"
+import { OptionsInfo, TRIGGER_FUNCTION_MAP, getIdentifierNodeOptions, getGlblStdComps } from "./nodeOptions"
 import { libCompletionVarNames, libCompletionVarTypes } from "./sessionPackageData"
 
 import { RLanguage } from "../../argonaut-lezer-r/src"
@@ -12,23 +13,29 @@ import { RLanguage } from "../../argonaut-lezer-r/src"
 // Fields and Contstants
 //=================================
 
-const ALT_COMPLETION_PARENTS = ["DollarExpr"]
 const KEYWORDS = ["if", "else", "for", "in", "while", "repeat", "function"]
 const KEYWORD_TYPES = new Array(KEYWORDS.length).fill("keyword")
 
+type CompletionCacheInfo = {
+    useStdOptions: boolean,
+    functionOnly?: boolean,
+    from: number
+}
+
+
 let savedContext: CompletionContext | null
-let savedData: any | null
+let savedData: CompletionCacheInfo | null
 
 //=================================
 // Completions Extensions
 //=================================
-export const maincompletions = RLanguage.data.of({
+export const mainCompletions = RLanguage.data.of({
     autocomplete: getMainCompletions
 })
-export const packagecompletions = RLanguage.data.of({
+export const packageCompletions = RLanguage.data.of({
     autocomplete: getPkgCompletions
 })
-export const keywordcompletions = RLanguage.data.of({
+export const keywordCompletions = RLanguage.data.of({
     autocomplete: getKeywordCompletions
 })
 
@@ -51,32 +58,52 @@ function getMainCompletions(context: CompletionContext) {
  
      let containingNode: SyntaxNode | null = syntaxTree(context.state).resolve(context.pos, -1)
      if (containingNode !== null) {
-         //check for trigger token
-         let nodeName = containingNode.name
-         let parentNode = containingNode.parent
-         let docState = getDocState(context.state)
- 
-         //dollar expression child name completion
-         //THIS IS NOT CORRECT - the get chidl index part needs to be fixed.
-         if( parentNode !== null && (nodeName == "DollarExpr" || parentNode.name == "DollarExpr") && getChildIndex(containingNode) == 1 ) {
-            let dollarExprNode = containingNode.name == "DollarExpr" ? containingNode : parentNode
-            let completions = getDollarExprCompletions(dollarExprNode!, context, docState)
-            if (completions !== null) return completions
-        }
- 
-        //general variable completion
-         if (nodeName == "Identifier" && parentNode !== null ) {
-            //store this info for other completion sources to use
-            savedData = {
-                type: "Identifier",
-                from: containingNode!.from
+        let nodeName = containingNode.type.name
+        let optionsInfo: OptionsInfo | null = null
+        let startPos: number | undefined 
+
+        let triggerFunction = TRIGGER_FUNCTION_MAP[nodeName]
+        if(triggerFunction !== undefined) {
+            //check for a trigger node
+            let parentNode = containingNode.parent
+            if(parentNode !== null) {
+                optionsInfo = triggerFunction(parentNode!,context.state)
             }
+            //start after the trigger node
+            startPos = containingNode.to
+        }
+        else  if(nodeName == "Identifier") {
+            //handle identifier nodes
+            optionsInfo = getIdentifierNodeOptions(containingNode, context.state)
+            //start at the start of the identifier node
+            startPos = containingNode.from
+        }
 
-            //get the completions for globals here
-            let completions = getGlblIdentComps(containingNode!, context, docState)
-            if (completions !== null) return completions
-         }
-
+        if(optionsInfo != null) {
+            if(optionsInfo.nonStdOptions !== undefined) {
+                //NEED TO CHECK STD FLAG!!!
+                let valueList = optionsInfo.nonStdOptions.names
+                let valueTypeInfo = optionsInfo.nonStdOptions.typeInfo 
+                return makeWordListResponse(valueList,valueTypeInfo,startPos!)
+            }
+            else if(optionsInfo.useStdOptions) {
+                //--------------------------
+                // this is cahced data
+                //--------------------------
+                savedData = {
+                    useStdOptions: optionsInfo.useStdOptions,
+                    functionOnly: optionsInfo.functionOnly,
+                    from: startPos!
+                }
+                
+                let optionList = getGlblStdComps(containingNode!, context.state, optionsInfo.functionOnly)
+                if(optionList !== null) {
+                    let valueList = optionList.names
+                    let valueTypeInfo = optionList.typeInfo 
+                    return makeWordListResponse(valueList,valueTypeInfo,startPos!)
+                }
+            }
+        }
      }
      return undefined
 }
@@ -84,8 +111,9 @@ function getMainCompletions(context: CompletionContext) {
 function getPkgCompletions(context: CompletionContext) {
     if(libCompletionVarNames.length == 0) return undefined
 
-    if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) {  
-        if(savedData && savedData.type == "Identifier") {
+    if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) { 
+        //IMPLEMENT FUNCTION OPTION!? 
+        if(savedData && savedData.useStdOptions) {
             return makeWordListResponse(libCompletionVarNames, libCompletionVarTypes, savedData.from)
         }
     }
@@ -96,32 +124,14 @@ function getPkgCompletions(context: CompletionContext) {
 
 function getKeywordCompletions(context: CompletionContext) {
     if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) {
-        if(savedData && savedData.type == "Identifier") {
+        //IMPLEMENT FUNCTION OPTION!? 
+        if(savedData && savedData.useStdOptions) {
             return makeWordListResponse(KEYWORDS, KEYWORD_TYPES, savedData.from)
         }
     }
     else {
         return undefined
     }    
-}
-
-//----------------------
-// Dollar Sign Completions
-//----------------------
-
-function getDollarExprCompletions(dollarExprNode: SyntaxNode, context: CompletionContext, docState: DocState) {
-    let startPos = context.pos
-    if (dollarExprNode !== null) {
-        let callerValue = getCallerValue(dollarExprNode!, context.state, docState)
-        if (callerValue !== null) {
-            let nameList = getListNames(callerValue!)
-            if (nameList !== null) {
-                startPos
-                return makeWordListResponse(nameList!, "property", startPos)
-            }
-        }
-    }
-    return null
 }
 
 /** This makees a autocompletion word list
@@ -145,43 +155,4 @@ function makeWordListResponse(valueList: string[], valueTypeInfo: string | strin
     //note add detail and info:
     //detail could be the type and other into (appears in dropdown entry)
     //info could be a description (is an extension of dropdown entry)
-}
-
-//----------------------
-// General Identifier Completions - Globals
-//----------------------
-
-function getGlblIdentComps(identifierNode: SyntaxNode, context: CompletionContext, docState: DocState) {
-    let cellNode = getAssociatedCellNode(identifierNode)
-    if (cellNode !== null) {
-        //We only need to consider inputs. We don't predict outputs yet
-        //if we have a LHS context completion, we might want different results?
-        let prevCellNode = getPrevCellNode(cellNode)
-        if(prevCellNode !== null) {
-            //WE DON'T HANDLE FIRST LINE PROPERLY!
-            let prevCellInfo = getCellInfo(prevCellNode, docState)
-            if (prevCellInfo !== null && prevCellInfo!.isUpToDate()) {
-                let varNames = Object.keys(prevCellInfo.cellEnv)
-                let varTypes = new Array(varNames.length).fill("variable")
-
-                return makeWordListResponse(varNames, varTypes, identifierNode.from)
-
-                //let wordList = varNames.concat(KEYWORDS)
-                //let typeList = varTypes.concat(KEYWORD_TYPES)
-                //return makeWordListResponse(wordList, typeList, identifierNode.from)
-            }
-        }
-    }
-    return null
-}
-
-/** This gets the names from a list-type object */
-export function getListNames(callerValue: any): string[] | null {
-    if (callerValue.fmt == "list" && callerValue.names !== undefined) {
-        return callerValue.names.filter((name: string) => name !== "")
-    }
-    else if (callerValue.fmt == "data.frame" && callerValue.colNames !== undefined) {
-        return callerValue.colNames.filter((name: string) => name !== "")
-    }
-    return null
 }

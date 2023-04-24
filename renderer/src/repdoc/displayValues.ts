@@ -1,3 +1,4 @@
+/** This file provides functions to get display information for value objects from the session. */
 
 export type VarInfo = {
     label: string,
