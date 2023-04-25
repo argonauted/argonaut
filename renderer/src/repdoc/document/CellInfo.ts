@@ -1,12 +1,18 @@
-import {VarInfo} from "./displayValues"
-import OutputDisplay from "./OutputDisplay"
-import VarDisplay from "./VarDisplay"
+/** This file contains a class which manages the state for a cell object. */
 import {Decoration} from "@codemirror/view"
 import type {Range, EditorState} from '@codemirror/state'
-import { ErrorInfoStruct, SessionOutputData } from "../session/sessionApi"
-import { VarTable, lookupValue } from "./varTable"
+import { ErrorInfoStruct, SessionOutputData } from "../../session/sessionApi"
+import { VarTable, CellEnv, EMPTY_CELL_ENV, RValueStruct } from "../../session/sessionTypes"
+import { lookupDocValue } from "../sessionData/sessionValues"
+import OutputDisplay from "./OutputDisplay"
+import VarDisplay from "./VarDisplay"
 
 const INVALID_VERSION_NUMBER = -1
+
+type VarInfo = {
+    label: string,
+    value: RValueStruct
+}
 
 interface CellInfoParams {
     status?: string
@@ -24,11 +30,11 @@ interface CellInfoParams {
     values?: string[]
     errorInfos?: ErrorInfoStruct[]
     varInfos?: VarInfo[] | null
-    cellEnv?: Record<string,string>
+    cellEnv?: CellEnv
     outputVersion?: number
 }
 
-export default class CellInfo {
+export class CellInfo {
     readonly id: string = "INVALID" //this used to be set in the constructor, but typescript doesn't acknowledge the current code
     readonly status: string
     readonly from: number = 0 //this used to be set in the constructor, but typescript doesn't acknowledge the current code
@@ -45,7 +51,7 @@ export default class CellInfo {
     readonly plots: string[] = []
     readonly errorInfos: ErrorInfoStruct[] = []
     readonly varInfos: VarInfo[] | null = null
-    readonly cellEnv: Record<string,string> = {}
+    readonly cellEnv: CellEnv = EMPTY_CELL_ENV
     readonly outputVersion: number = INVALID_VERSION_NUMBER
 
     readonly outputDisplay: OutputDisplay | null = null
@@ -64,22 +70,10 @@ export default class CellInfo {
 
     readonly instanceVersion: number
 
-    pushDecorations(container: Range<Decoration>[]) {
-        if(this.lineShadingsRng !== null) {
-            container.push(...this.lineShadingsRng)
-        }
-        if(this.varDecorationRng != null) {
-            container.push(this.varDecorationRng)
-        }
-        if(this.outputDecorationRng != null) {
-            container.push(this.outputDecorationRng)
-        } 
-    }
-
-    private constructor(editorState: EditorState, refCellInfo: CellInfo | null, cellInfoParams: CellInfoParams) {
+    constructor(editorState: EditorState, refCellInfo: CellInfo | null, cellInfoParams: CellInfoParams) {
 
         if(refCellInfo === null) {
-            this.id = CellInfo.getId()
+            this.id = getId()
             this.instanceVersion = 1
 
             //require
@@ -117,7 +111,7 @@ export default class CellInfo {
         //------------------------------------
         let lineShadingChanged = false  //I could detect shading change, instead I just follow the status change
         if( statusChanged ) {
-            let className = this.getLineShadingClass()
+            let className = getLineShadingClass(this)
             if(className !== null) {
                 this.lineShading = Decoration.line({attributes: {class: className}})
             }
@@ -216,125 +210,160 @@ export default class CellInfo {
                 this.varDecorationRng = null
             }
         }
-
-        
     }
 
-    needsCreate() {
-        return (this.modelCode == null)
+}
+
+
+//=================================
+// Exported Functions
+//=================================
+
+export function cellInfoNeedsCreate(cellInfo: CellInfo) {
+    return (cellInfo.modelCode == null)
+}
+
+export function cellInfoUpToDate(cellInfo: CellInfo) {
+    return cellInfo.status == "value clean"
+}
+
+export function isCodeDirty(cellInfo: CellInfo) {
+    return ( cellInfo.status == "code dirty" )
+}
+
+/** This function finds the cell info with the given line ID. */
+export function getCellInfoByIndex(lineId: string, cellInfos: CellInfo[]) {
+    return cellInfos.findIndex(cellInfo => cellInfo.id == lineId)
+}
+
+/** This function finds the a cell info from a list by from position. */
+export function getCellInfoByFrom(fromPos:number, cellInfos: CellInfo[]) {
+    let prevCellInfo = cellInfos.find(cellInfo => cellInfo.from == fromPos)
+    if (prevCellInfo !== undefined) {
+        return prevCellInfo
+    }
+    return null
+}
+
+export function pushDecorations(cellInfo: CellInfo, container: Range<Decoration>[]) {
+    if(cellInfo.lineShadingsRng !== null) {
+        container.push(...cellInfo.lineShadingsRng)
+    }
+    if(cellInfo.varDecorationRng != null) {
+        container.push(cellInfo.varDecorationRng)
+    }
+    if(cellInfo.outputDecorationRng != null) {
+        container.push(cellInfo.outputDecorationRng)
+    } 
+}
+
+/** This function creates a new cell */
+export function newCellInfo(editorState: EditorState, from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
+    return new CellInfo(editorState,null,{from,to,fromLine,toLine,docCode,docVersion})
+}
+
+/** This function creates an updated cell for when the code changes. */
+export function  updateCellInfoCode(editorState: EditorState, cellInfo: CellInfo, from: number, to:number, fromLine: number, toLine:number, docCode: string, docVersion: number) {
+    return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine,docCode,docVersion})
+}
+
+/** This function creates a remapped cell info for when only the position changes */
+export function  remapCellInfo(editorState: EditorState, cellInfo: CellInfo, from: number,to: number, fromLine: number, toLine:number) {
+    return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine})
+}
+
+/** This function creates an updated cell for status and or output (console or plot) changes. */
+export function  updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
+    {newStatusUpdate, cellEvalStarted, cellEvalCompleted, 
+        addedConsoleLines, addedPlots, addedValues, addedErrorInfos, lineDisplayDatas, 
+        cellEnv, outputVersion}: SessionOutputData, varTable: VarTable) {
+    
+    //output version required if evalStarted or evalCompleted is set
+    
+    if(cellEvalStarted === true) {
+        //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
+        cellInfo = new CellInfo(editorState,cellInfo,{consoleLines: [], plots: [], values: []})
     }
 
-    canDelete() {
-        return (this.modelCode != null)
+    let params: CellInfoParams = {}
+
+    if(addedConsoleLines !== undefined) params.consoleLines = cellInfo.consoleLines.concat(addedConsoleLines)
+    if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
+
+    //error infos are reset on each eval
+    if(cellEvalStarted) {
+        params.errorInfos = (addedErrorInfos !== undefined) ? addedErrorInfos : []
     }
+    else if(addedErrorInfos !== undefined) params.errorInfos = cellInfo.errorInfos.concat(addedErrorInfos)
 
-    //=================================
-    // Private Functions
-    //=================================
-
-    private getLineShadingClass() {
-        if(this.status == "code dirty") {
-            return "cm-rd-codeDirtyShade"
-        }
-        else if(this.status == "value clean" || this.docCode == "") {
-            return null
+    if(outputVersion !== undefined) params.outputVersion = outputVersion
+    
+    //process the line display data
+    if(lineDisplayDatas !== undefined) {
+        if(lineDisplayDatas === null) {
+            params.varInfos = null
         }
         else {
-            //non-empty "value pending" or "inputs dirty"
-            return "cm-rd-valuePendingShade"
-        }
-    }
+            params.varInfos = []
+            lineDisplayDatas.forEach(lineDisplayData => {
+                let value = (lineDisplayData.lookupKey !== undefined) ?
+                    lookupDocValue(lineDisplayData.lookupKey, varTable) :
+                    lineDisplayData.value
 
-    //=================================
-    // Static Functions
-    //=================================
-
-    /** This function creates a new cell */
-    static newCellInfo(editorState: EditorState, from: number,to: number, fromLine: number, toLine:number,docCode: string, docVersion: number) {
-        return new CellInfo(editorState,null,{from,to,fromLine,toLine,docCode,docVersion})
-    }
-
-    /** This function creates an updated cell for when the code changes. */
-    static updateCellInfoCode(editorState: EditorState, cellInfo: CellInfo, from: number, to:number, fromLine: number, toLine:number, docCode: string, docVersion: number) {
-        return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine,docCode,docVersion})
-    }
-
-    /** This function creates a remapped cell info for when only the position changes */
-    static remapCellInfo(editorState: EditorState, cellInfo: CellInfo, from: number,to: number, fromLine: number, toLine:number) {
-        return new CellInfo(editorState,cellInfo,{from,to,fromLine,toLine})
-    }
-
-    /** This function creates an updated cell for status and or output (console or plot) changes. */
-    static updateCellInfoDisplay(editorState: EditorState, cellInfo: CellInfo, 
-        {newStatusUpdate, cellEvalStarted, cellEvalCompleted, 
-            addedConsoleLines, addedPlots, addedValues, addedErrorInfos, lineDisplayDatas, 
-            cellEnv, outputVersion}: SessionOutputData, varTable: VarTable) {
-        
-        //output version required if evalStarted or evalCompleted is set
-        
-        if(cellEvalStarted === true) {
-            //FOR NOW, UPDATE CELL INFO HERE SO WE CLEAR THE DISPLAY VALUES
-            cellInfo = new CellInfo(editorState,cellInfo,{consoleLines: [], plots: [], values: []})
-        }
-
-        let params: CellInfoParams = {}
-
-        if(addedConsoleLines !== undefined) params.consoleLines = cellInfo.consoleLines.concat(addedConsoleLines)
-        if(addedPlots !== undefined) params.plots = cellInfo.plots.concat(addedPlots)
-
-        //error infos are reset on each eval
-        if(cellEvalStarted) {
-            params.errorInfos = (addedErrorInfos !== undefined) ? addedErrorInfos : []
-        }
-        else if(addedErrorInfos !== undefined) params.errorInfos = cellInfo.errorInfos.concat(addedErrorInfos)
-
-        if(outputVersion !== undefined) params.outputVersion = outputVersion
-        
-        //process the line display data
-        if(lineDisplayDatas !== undefined) {
-            if(lineDisplayDatas === null) {
-                params.varInfos = null
-            }
-            else {
-                params.varInfos =  lineDisplayDatas.map(lineDisplayData => {
-                    let value = (lineDisplayData.lookupKey !== undefined) ?
-                        lookupValue(varTable, lineDisplayData.lookupKey) :
-                        lineDisplayData.value
-
-                    return {
+                if(value !== undefined) {
+                    params.varInfos!.push({
                         label: lineDisplayData.label,
                         value
-                    }
-                })
-            }
+                    })
+                }
+            })
         }
-
-        if(cellEnv !== undefined) {
-            params.cellEnv = cellEnv
-        }
-
-        return new CellInfo(editorState,cellInfo,params)
     }
 
-    /** This function creates a update cell info for when session commands are sent (to craete or update the cell) */
-    static updateCellInfoForCommand(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
-        return new CellInfo(editorState,cellInfo,{
-            modelCode: cellInfo.docCode,
-            modelVersion: cellInfo.docVersion,
-            inputVersion: currentDocVersion
-        })
+    if(cellEnv !== undefined) {
+        params.cellEnv = cellEnv
     }
 
-    static updateCellInfoForInputVersion(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
-        return new CellInfo(editorState,cellInfo,{inputVersion: currentDocVersion})
-    }
+    return new CellInfo(editorState,cellInfo,params)
+}
 
-    //for now we make a dummy id here
-    private static nextId = 1
-    private static getId() {
-        return "l" + String(CellInfo.nextId++)
+/** This function creates a update cell info for when session commands are sent (to craete or update the cell) */
+export function  updateCellInfoForCommand(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
+    return new CellInfo(editorState,cellInfo,{
+        modelCode: cellInfo.docCode,
+        modelVersion: cellInfo.docVersion,
+        inputVersion: currentDocVersion
+    })
+}
+
+export function  updateCellInfoForInputVersion(editorState: EditorState, cellInfo: CellInfo, currentDocVersion: number): CellInfo {
+    return new CellInfo(editorState,cellInfo,{inputVersion: currentDocVersion})
+}
+
+
+//====================================
+// internal functions
+//====================================
+
+//for now we make a dummy id here
+let nextId = 1
+function getId() {
+    return "l" + String(nextId++)
+}
+
+function getLineShadingClass(cellInfo: CellInfo) {
+    if(cellInfo.status == "code dirty") {
+        return "cm-rd-codeDirtyShade"
+    }
+    else if(cellInfo.status == "value clean" || cellInfo.docCode == "") {
+        return null
+    }
+    else {
+        //non-empty "value pending" or "inputs dirty"
+        return "cm-rd-valuePendingShade"
     }
 }
+
 
 
 function determineStatus(cellInfo: CellInfo) {

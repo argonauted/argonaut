@@ -1,9 +1,9 @@
 @precedence {
   exprterm @left,
   exprx @left,
-  member @left,
-  compon @left,
-  index @left,
+  nmspc @left,
+  child @left,
+  subset @left,
   funcall @left,
   exp @left,
   sign @right,
@@ -35,7 +35,12 @@
 @skip { spaces | Comment }
 
 expression {
-   literal | Identifier | UnaryExpr | BinaryExpr | ParenExpr | ControlExpr | callExpr | Block 
+  literal | Identifier | 
+  UnaryExpr | BinaryExpr | AssignExpr |
+  DollarExpr | NamespaceExpr | SlotExpr | BrckExpr | DblBrckExpr |
+  ParenExpr  | Block |
+  IfExpr | RepeatExpr | WhileExpr | ForExpr |
+  StdCall | FuncDef
 }
 
 literal { 
@@ -46,25 +51,23 @@ Identifier {
   simpleName | backtickName   
 }
 
-
-
 cellPattern { (expression  ";" !exprterm)* expression ";"? !exprterm }
 
-EmptyCell { () }
+EmptyCell[group="cell"] { () }
 emptyLine { EmptyCell newline }
-Cell { cellPattern }
+Cell[group="cell"] { cellPattern }
 line { Cell newline emptyLine* !exprterm }
-EndCell { cellPattern eof}
-EmptyEnd { eof }
+EndCell[group="cell"] { cellPattern eof}
+EmptyEnd[group="cell"] { eof }
 
-BEmptyCell { () }
+BEmptyCell[group="cell"] { () }
 bEmptyLine { BEmptyCell newline }
-BCell { cellPattern }
+BCell[group="cell"] { cellPattern }
 bLine { BCell newline bEmptyLine* !exprterm }
-BEndCell { cellPattern closeBrace}
-BEmptyEnd { closeBrace }
+BEndCell[group="cell"] { cellPattern closeBrace}
+BEmptyEnd[group="cell"] { closeBrace }
 bStart { openBrace ( bEmptyLine | bLine) }
-BEmptyBlock { openBrace closeBrace }
+BEmptyBlock[group="cell"] { openBrace closeBrace }
 
 @top Script { emptyLine* line* ( EndCell | EmptyEnd )  }
 
@@ -91,23 +94,27 @@ BinaryExpr {
     expression !comp CompOp< "<" | ">" | ">=" | "<=" | "==" | "!=" > newline* expression |
     expression !and LogicOp< "&" | "&&" > newline* expression |
     expression !or LogicOp< "|" | "||" > newline* expression |
-    expression !lassign AssignOp< "<-" | "<<-" > newline* expression |
-    expression !rassign AssignOp< "->" | "->>" > newline* expression |
-    expression !eqassign equalsAssignOp newline* expression |
-    expression !frmla GenOp< "~" > newline* expression | 
-    expression !compon MemberOp< "$" | "@" > newline* ( Identifier | Character ) |
-    Identifier !member MemberOp< "::" | ":::" > newline* Identifier
+    expression !frmla GenOp< "~" > newline* expression
 }
 
 ArithOp<op> { op }
 CompOp<op> { op }
 LogicOp<op> { op }
-AssignOp<op> { op }
-equalsAssignOp[@name="AssignOp"] { equalSign }
 GenOp<op> { op }
-MemberOp<op> { op }
 
-ifExpr { ifKwd newline* openParen newline* expression newline* closeParen newline* expression ifEnding }
+AssignExpr {
+  expression !lassign ( "<-" | "<<-" ) newline* expression |
+  expression !rassign ( "->" | "->>" ) newline* expression |
+  expression !eqassign equalSign newline* expression
+}
+
+DollarExpr { expression !child "$" newline* ( Identifier | Character ) }
+NamespaceExpr { Identifier !nmspc ( "::" | ":::" ) newline* Identifier }
+SlotExpr { expression !child "@" newline* ( Identifier | Character ) }
+BrckExpr { expression newline* !subset openBrack newline* SubsetArgList closeBrack }
+DblBrckExpr { expression newline* !subset openDBrack newline* SubsetArgList closeDBrack }
+
+IfExpr { ifKwd newline* openParen newline* expression newline* closeParen newline* expression ifEnding }
 
 ifEnding { 
   ~ifelse ()
@@ -115,13 +122,9 @@ ifEnding {
   ~ifelse newline* elseKwd newline* !else expression  
 }
 
-repeatExpr { repeatKwd newline* !repeat expression }
-whileExpr { whileKwd newline* openParen newline* expression newline* closeParen newline* !while expression }
-forExpr { forKwd newline* openParen newline* Identifier newline* inKwd newline* !in expression closeParen newline* !for expression }
-
-ControlExpr {
-  ifExpr | repeatExpr | whileExpr | forExpr
-}
+RepeatExpr { repeatKwd newline* !repeat expression }
+WhileExpr { whileKwd newline* openParen newline* expression newline* closeParen newline* !while expression }
+ForExpr { forKwd newline* openParen newline* Identifier newline* inKwd newline* !in expression closeParen newline* !for expression }
 
 EmptyArg { () }
 plainArgValue[@name="ArgValue"] { expression ~args newline*  }
@@ -130,13 +133,14 @@ argValue { EmptyArg | plainArgValue | labeledArgValue }
 ArgList { 
   argValue ( "," newline* argValue )*
 }
+SubsetEmptyArg { () }
+SubsetArgValue { expression ~args newline*  }
+subsetArgValue { SubsetEmptyArg | SubsetArgValue } 
+SubsetArgList {
+  subsetArgValue ( "," newline* subsetArgValue )*
+}
 
 StdCall { expression newline* !funcall openParen newline* ArgList closeParen }
-
-IndexExpr {
-  expression newline* !index openBrack newline* ArgList closeBrack |
-  expression newline* !index openDBrack newline* ArgList closeDBrack
-}
 
 commaSep<x> { "" | x ( "," newline* x)* }
 
@@ -144,9 +148,7 @@ ParamValue { Identifier newline* ( equalSign newline* expression newline* )? }
 ParamList { commaSep<ParamValue>  }
 FuncDef { functionKwd newline* openParen newline* ParamList closeParen newline* !funbody expression }
 
-callExpr {
-  StdCall | IndexExpr | FuncDef
-}
+
 
 kw<term> { @specialize[@name={term}]<simpleName, term> }
 
@@ -227,12 +229,12 @@ infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | inf
 
   openBrace { "{" }
   closeBrace { "}" }
-  openBrack[ @name="[" ] { "[" }
+  openBrack[@name="["] { "[" }
   closeBrack[@name="]"] { "]" }
   openDBrack[@name="[[" ] { "[[" }
   closeDBrack[@name="]]"] { "]]" }
-  openParen { "(" }
-  closeParen { ")" }
+  openParen[@name="("] { "(" }
+  closeParen[@name=")"] { ")" }
 
   equalSign[@name="="] { "=" }
 

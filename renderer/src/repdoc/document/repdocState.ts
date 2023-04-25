@@ -1,18 +1,27 @@
-import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
-import CellInfo from "./CellInfo"
+/** This file holds the repdocState extension, which manages the repdoc State, bridging the editor with the R session.  */
+
 import {syntaxTree} from "@codemirror/language"
-import {EditorView, Decoration} from "@codemirror/view"
-import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirror/state'
-import { RangeSet, StateField, StateEffect } from '@codemirror/state'
-import { sessionOutputEffect } from "../editor/sessionEvents"
-import { getSessionId } from "../editor/editorConfig"
-import { VarTable, getEmptyVarTable, getUpdatedVarTable } from "./varTable"
+import {EditorView} from "@codemirror/view"
+import type { EditorState, Transaction, ChangeSet, Text } from '@codemirror/state'
+import { StateField, StateEffect } from '@codemirror/state'
+import {SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../../session/sessionApi"
+import { getEmptyVarTable } from "../../session/sessionTypes" 
+import { isEmptyCell } from "../nodeUtils"
+import { getUpdatedVarTable } from "../sessionData/sessionValues"
+import { DocState, createDocState } from "./docState"
+import { CellInfo, updateCellInfoDisplay, cellInfoNeedsCreate, isCodeDirty, getCellInfoByIndex }  from "./CellInfo"
+import { CellUpdateInfo, Action, getCUICodeText, getCUIFromLine, getCUIToLine, actionIsAnEdit, 
+    createCellInfos, getNewUpdateInfo, getRemapUpdateInfo, getModUpdateInfo ,getReuseUpdateInfo, canDelete } from "./cellUpdateInfo"
+import { issueSessionCommands } from "./sessionCommands"
+import { sessionOutputEffect } from "../../editor/sessionToEditor"
+import { getSessionId } from "../../editor/editorConfig"
+
 
 //===============================
 // Repdoc Codemirror Extension
 //===============================
 
-export const InteractiveCodeField = StateField.define<DocState>({
+export const repdocState = StateField.define<DocState>({
     create(editorState) {
         return processDocChanges(editorState)
     },
@@ -30,42 +39,12 @@ export const InteractiveCodeField = StateField.define<DocState>({
 })
 
 export function getDocState(editorState: EditorState) {
-    return editorState.field(InteractiveCodeField)
+    return editorState.field(repdocState)
 }
-
 
 //===================================
 // Data Structures
 //===================================
-
-export type DocState = {
-    docVersion: number
-    cellInfos: CellInfo[]
-    varTable: VarTable
-    parseTreeCurrent: boolean
-    hasParseErrors: boolean
-    hasDirtyCells: boolean
-    decorations: RangeSet<Decoration>
-}
-
-enum Action {
-    create,
-    update,
-    delete,
-    remap,
-    reuse
-}
-
-
-type CellUpdateInfo = {
-    action: Action
-    cellInfo?: CellInfo
-    newFrom?: number
-    newTo?: number
-    newFromLine: number //we require this one
-    newToLine?: number
-    codeText?: string
-}
 
 // type PreparseError = {
 //     from: number,
@@ -83,62 +62,10 @@ const INITIAL_DOCUMENT_VERSION = 1
 const INVALID_CELL_INDEX = -1
 const INVALID_LINE_NUMBER = -1 //line number is 1 based
 
-//=============================
-// Accessors for the above types
-//=============================
-
-function getCUIFrom(cui: CellUpdateInfo) {
-    if(cui.newFrom !== undefined) return cui.newFrom
-    else if(cui.cellInfo !== undefined) return cui.cellInfo!.from
-    else throw new Error("Unexpected: position not found in cell update info")
-}
-
-function getCUIFromLine(cui: CellUpdateInfo) {
-    return cui.newFromLine
-}
-
-function getCUITo(cui: CellUpdateInfo) {
-    if(cui.newTo !== undefined) return cui.newTo
-    else if(cui.cellInfo !== undefined) return cui.cellInfo!.to
-    else throw new Error("Unexpected: position not found in cell update info")
-}
-
-function getCUIToLine(cui: CellUpdateInfo) {
-    if(cui.newToLine !== undefined) return cui.newToLine
-    else if(cui.cellInfo !== undefined) return cui.cellInfo!.toLine
-    else throw new Error("Unexpected: position not found in cell update info")
-}
-
-function getCUICodeText(cui: CellUpdateInfo) {
-    if(cui.codeText !== undefined) return cui.codeText
-    else if(cui.cellInfo !== undefined) return cui.cellInfo!.docCode
-    else throw new Error("Unexpected: code text not found in cell update info")
-}
-
-
-
 //===================================
 // Internal Functions
 //===================================
 
-/** This function creates a docState object. */
-function createDocState(cellInfos: CellInfo[], varTable: VarTable, docVersion: number,parseTreeUsed: boolean, hasParseErrors: boolean): DocState {
-    let decorations: Range<Decoration>[] = []
-    if(cellInfos.length > 0) {
-        cellInfos.forEach(cellInfo => cellInfo.pushDecorations(decorations))
-    }
-
-    return {
-        docVersion: docVersion,
-        cellInfos: cellInfos,
-        varTable: varTable,
-        parseTreeCurrent: parseTreeUsed,
-        hasParseErrors: hasParseErrors,
-        hasDirtyCells: cellInfos.some(cellInfo => isCodeDirty(cellInfo) ),
-        decorations: (decorations.length > 0) ? 
-            RangeSet.of(decorations) : Decoration.none
-    }
-}
 
 //--------------------------
 // Process Session Messages
@@ -158,29 +85,29 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
 
             for(let i2 = 0; i2 < effect.value.length; i2++) {
                 //we are doing only one session for now
-                let sessionOutputData = effect.value[i2] as SessionOutputEvent
-                if(sessionOutputData.lineId !== null) {
-                    if(sessionOutputData.data.docEnvUpdate !== undefined) {
-                        varTable = getUpdatedVarTable(varTable, sessionOutputData.data.docEnvUpdate)
+                let sessionOutputEventData = effect.value[i2] as SessionOutputEvent
+                if(sessionOutputEventData.lineId !== null) {
+                    if(sessionOutputEventData.data.docEnvUpdate !== undefined) {
+                        varTable = getUpdatedVarTable(varTable, sessionOutputEventData.data.docEnvUpdate)
                     }
 
-                    if(sessionOutputData.lineId == PRE_LINE_ID) {
+                    if(sessionOutputEventData.lineId == PRE_LINE_ID) {
                         //special case - initialization of document
                         newCellInfos = docState.cellInfos
                     }
                     else {
-                        let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
+                        let index = getCellInfoByIndex(sessionOutputEventData.lineId,newCellInfos)
                         if(index >= 0) {
-                            newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data, varTable)
+                            newCellInfos[index] = updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputEventData.data, varTable)
                         }
                         else {
-                            console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
+                            console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputEventData))
                         }
                     }
                 }
                 else {
                     //figure out where we want to print this
-                    printNonLineOutput(sessionOutputData)
+                    printNonLineOutput(sessionOutputEventData)
                 }
             }
 
@@ -191,15 +118,10 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
     return docState
 }
 
-/** This function finds the cell info with the given line ID. */
-function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
-    return cellInfos.findIndex(cellInfo => cellInfo.id == lineId)
-}
-
 //fix the type here
-function printNonLineOutput(sessionOutputData: any) {
-    if(sessionOutputData.data.addedConsoleLines !== undefined) {
-        let lines = sessionOutputData.data.addedConsoleLines
+function printNonLineOutput(sessionOutputEventData: SessionOutputEvent) {
+    if(sessionOutputEventData.data.addedConsoleLines !== undefined) {
+        let lines = sessionOutputEventData.data.addedConsoleLines
         for(let i = 0; i < lines.length; i++) {
             if(lines[i][0] == "stdout") {
                 console.log(lines[i][1])
@@ -381,41 +303,6 @@ function textAdded(changes: ChangeSet) {
     return textAdded
 }
 
-function isCodeDirty(cellInfo: CellInfo) {
-    return ( cellInfo.status == "code dirty" )
-}
-
-function isEmptyCell(nodeName: string) {
-    return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
-}
-
-function actionIsAnEdit(action: Action) {
-    return action == Action.create || action == Action.update || action == Action.delete
-}
-
-/** This function creates a CellInfo object from a CellUpdateInfo. */
-function createCellInfos(editorState: EditorState, cellUpdateInfos: CellUpdateInfo[],docVersion:number) {
-
-    return cellUpdateInfos.map( cui => {
-        switch(cui.action) {
-            case Action.create: 
-                return CellInfo.newCellInfo(editorState,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
-
-            case Action.update: 
-                return CellInfo.updateCellInfoCode(editorState,cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!,cui.codeText!,docVersion) 
-
-            case Action.remap: 
-                return CellInfo.remapCellInfo(editorState,cui.cellInfo!,cui.newFrom!,cui.newTo!,cui.newFromLine,cui.newToLine!)
-
-            case Action.reuse: 
-                return  cui.cellInfo!
-
-            case Action.delete:
-                throw new Error("Unexpected delete action")
-        }
-    })
-}
-
 /** This function gets update data for the cells from the previous doc state based on text changes. It
  * does not use the new parse tree. */
 function updateOldCells(editorState: EditorState, transaction: Transaction, docState?: DocState) {
@@ -523,14 +410,6 @@ function updateOldCells(editorState: EditorState, transaction: Transaction, docS
     }
 }
 
-function canDelete(cellUpdateInfo: CellUpdateInfo) {
-    return ( cellUpdateInfo.cellInfo !== undefined && !cellUpdateInfo.cellInfo!.needsCreate() )
-}
-
-function getReuseUpdateInfo(cellInfo: CellInfo) {
-    return {action: Action.reuse, cellInfo, newFromLine: cellInfo.fromLine}
-}
-
 //firstMissingLine is used only the first pass, when prevUpdateInfo is not set, to see if we need to fill a start gap.
 function getEditedUpdateInfo(cellInfo: CellInfo, prevUpdateInfo: CellUpdateInfo | undefined, docText: Text, changes: ChangeSet, firstMissingLine: number) {
     let pendingUpdateInfo: CellUpdateInfo | undefined
@@ -624,41 +503,6 @@ function getFinalGapUpdate(endLine: number, prevUpdateInfo: CellUpdateInfo, docT
         //no gap
         return undefined
     }
-}
-
-function getModUpdateInfo(cellInfo: CellInfo, docText: Text,changes: ChangeSet) {
-    let mappedFrom = changes.mapPos(cellInfo.from,-1) 
-    let newFromLineObject = docText.lineAt(mappedFrom)
-    let newFromLine = newFromLineObject.number
-    let newFrom = newFromLineObject.from
-    let mappedTo = changes.mapPos(cellInfo.to,1)
-    let newToLineObject = docText.lineAt(mappedTo)
-    let newToLine = newToLineObject.number  
-    let newTo = newToLineObject.to
-    let codeText = docText.sliceString(newFrom,newTo).trim()
-    if(codeText !== cellInfo.docCode) {
-        return {action: Action.update, cellInfo, newFrom, newFromLine, newTo, newToLine,codeText}
-    }
-    else {
-        return  {action: Action.remap, cellInfo, newFrom, newFromLine, newTo, newToLine}
-    }
-}
-
-function getNewUpdateInfo(newFrom: number, newFromLine: number, newTo: number, newToLine: number, docText: Text) {
-    let codeText = docText.sliceString(newFrom,newTo).trim()
-    return {action: Action.create, newFrom, newFromLine, newTo, newToLine, codeText}
-} 
-
-function getRemapUpdateInfo(cellInfo: CellInfo, docText: Text, changes: ChangeSet) {
-    let mappedFrom = changes.mapPos(cellInfo.from,1) //"1" means map to the right of insert text at this point
-    let newFromLineObject = docText.lineAt(mappedFrom)
-    let newFromLine = newFromLineObject.number
-    let newFrom = newFromLineObject.from
-    let mappedTo = changes.mapPos(cellInfo.to,-1) //"-1" means map to the left of insert text at this point
-    let newToLineObject = docText.lineAt(mappedTo)
-    let newToLine = newToLineObject.number  
-    let newTo = newToLineObject.to
-    return {action: Action.remap, cellInfo, newFrom, newFromLine, newTo, newToLine}
 }
 
 /** This function creates new cells based on the updatede document parse tree. */
@@ -814,7 +658,7 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
     oldCellUsed.forEach( (cellUsed,index) => {
         if(!cellUsed) {
             let cellInfo = oldCellUpdateInfos![index].cellInfo
-            if(cellInfo !== undefined && !cellInfo.needsCreate() ) {
+            if(cellInfo !== undefined && !cellInfoNeedsCreate(cellInfo) ) {
                 unusedOldCells.push(cellInfo)
             }
         }
@@ -831,84 +675,3 @@ function parseNewCells(editorState: EditorState, oldCellUpdateInfos: CellUpdateI
         newActiveEditType: activeEditType
     }
 }
-
-//--------------------------
-// Issue Session Commands
-//--------------------------
-
-/** This method issues any needed session commands from the current state. */
-function issueSessionCommands(docSessionId: string, editorState: EditorState, activeCellInfos: CellInfo[], cellInfosToDelete: CellInfo[], docVersion: number, nonCommandIndex: number) {
-    let commands:CodeCommand[] = []
-    let updatedCellInfos: CellInfo[] = []
-
-    //send all the delete commands if there are any
-    cellInfosToDelete.forEach(cellInfo => {
-        commands.push(createDeleteAction(cellInfo)) 
-    })     
-
-    //send create/update commands for any cell with code dirty beneat the non-command index
-    //for(let index = 0; index < nonCommandIndex; index++) {
-    let cellCommandCreated = false
-    activeCellInfos.forEach( (cellInfo,index) => {
-        if( isCodeDirty(cellInfo) && index < nonCommandIndex ) {
-            let {newCellInfo,command} = createAddUpdateAction(editorState,cellInfo,index,docVersion)
-            updatedCellInfos.push(newCellInfo)
-            commands.push(command) 
-            cellCommandCreated = true
-        }
-        else if(cellCommandCreated) {
-            updatedCellInfos.push(CellInfo.updateCellInfoForInputVersion(editorState,cellInfo,docVersion))
-        }
-        else {
-            updatedCellInfos.push(cellInfo)
-        }
-    })
-
-    //send commands
-    if(commands.length > 0) {
-        sendCommands(docSessionId,commands,docVersion)
-    }
-
-    //return modified cell infos
-    return updatedCellInfos
-}
-
-/** This function creates a delete command object. */
-function createDeleteAction(cellInfo: CellInfo) {
-    //console.log("Delete command: id = " + cellInfo.id)
-    let command: CodeCommand = {
-        type:"delete",
-        lineId: cellInfo.id
-    }
-    return command
-}
-
-/** This function creates an add or update command for the cell Info and returns
- * the updated cell infos associated with sending the command. */
-function createAddUpdateAction(editorState: EditorState, cellInfo: CellInfo, zeroBasedIndex: number, docVersion: number) {
-    let command: CodeCommand = {
-        type: "",
-        lineId: cellInfo.id,
-        code: cellInfo.docCode
-        
-    }
-    if(cellInfo.needsCreate()) {
-        command.type = "add"
-        command.after = zeroBasedIndex //NOTE: the after value is 1-based index - 1, which is just the zero based index
-    }
-    else {
-        command.type = "update"
-    }
-
-    let newCellInfo: CellInfo = CellInfo.updateCellInfoForCommand(editorState,cellInfo,docVersion)
-
-    return {command,newCellInfo}
-}
-
-/** This function sends a list of commands. */
-function sendCommands(docSessionId: string, commands: CodeCommand[],docVersion: number) {
-    //console.log("Commands to send:")
-    //console.log(JSON.stringify(commands))
-    evaluateSessionCmds(docSessionId,commands,docVersion)
-}
-

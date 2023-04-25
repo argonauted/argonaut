@@ -1,4 +1,4 @@
-import { DocEnvUpdateData } from "../repdoc/varTable" 
+import { DocEnvUpdateData, RValueStruct, CellEnv, PkgData } from "./sessionTypes" 
 
 const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 
@@ -17,7 +17,7 @@ export type CodeCommand = {
 export interface LineDisplayData  {
     label: string
     lookupKey?: string
-    value?: any
+    value?: RValueStruct
 }
 
 export type SessionOutputData = {
@@ -30,7 +30,7 @@ export type SessionOutputData = {
     cellEvalCompleted?: boolean
     outputVersion?: number
     lineDisplayDatas?: LineDisplayData[]
-    cellEnv?: Record<string,string>
+    cellEnv?: CellEnv
     docEnvUpdate?: DocEnvUpdateData
     docEvalCompleted?: boolean
     nextLineIndex1?: number
@@ -54,7 +54,8 @@ export type ErrorInfoStruct = {
 }
 
 export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
-                           null /* initComplete */
+                            PkgData  /* DOH! fix this*/ |
+                            null /* initComplete */
   
 /** This is the format used in the sendCommand function for a RSession request. */
 type SessionRequestWrapper = {
@@ -179,6 +180,61 @@ export function clearMaxEvalLine1(docSessionId: string) {
         console.log("Trying to clear max eval line on unknown session: " + docSessionId)
     }
 }
+
+//---------------------------
+// TESTING
+//---------------------------
+
+async function testOnInit() {
+    try {
+        //let result = await sendDirectCommand("loadLibEnvVars()")
+        //let envData = JSON.parse(JSON.parse(result.data.result))
+        //dispatch("envData", envData)
+
+        //KLUDGE FOR TESTING
+        let result1 = await sendDirectCommand("search()")
+        let fullList = JSON.parse("[" + result1.data.result.substring(2,result1.data.result.length-1) + "]")
+        let libList = fullList.slice(1)
+        getLib(libList,0)
+    }
+    catch(err: any) {
+        if(err) {
+            if(err.stack) console.error(err.stack)
+            else console.error(err.toString())
+        }
+        else {
+            console.error("Error loading env data")
+        }
+    }
+}
+
+//KLUDGE FOR TESTING
+function getLib(libList: string[], index: number) {
+    let pkgName = libList[index]
+    sendDirectCommand(`loadNamedLibEnvVars("${pkgName}")`).then(libResult => {
+        try {
+            if(libResult.data.result) {
+                let pkgData = JSON.parse(JSON.parse(libResult.data.result))
+                if(pkgData) {
+                    dispatch("pkgData",pkgData)
+                }
+            }
+        }
+        catch(err: any) {
+            console.log("Error loading data for package " + pkgName)
+            if(err.stack) console.error(err.stack)
+        }
+
+        if(index < libList.length - 1) {
+            getLib(libList,index+1)
+        }
+    }).catch(err => console.log("Error loading env data!"))
+}
+
+export function sendDirectCommand(codeText: string): Promise<any> {
+    return window.rSessionApi.sendRpcRequest('rpc','execute_r_code',[codeText])
+}
+
 
 //---------------------------
 // Commands
@@ -402,12 +458,12 @@ function evaluateAnySessionUpdates() {
 
 function sessionCommandSendFailed(e: any) {
     
-    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + e.toString()),0)
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY 1) Error in sending command: " + e.toString()),0)
     disableSessionCommands("Send Failed - Recovery Implementation needed")
 }
 
 function sessionCommandErrorResponse(msg: string) {
-    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY) Error in sending command: " + msg),0)
+    setTimeout(() => window.dialogApi.errorDialog("(IMPLEMENT RECOVERY 2) Error in sending command: " + msg),0)
     disableSessionCommands("Session failure response - Recovery Implementation needed")
 }
             
@@ -739,6 +795,9 @@ function initRepdocSequence() {
                     //initComplete = true
                     enableSessionCommands()
                     dispatch("initComplete",null)
+
+
+                    setTimeout(testOnInit,0)
                 }
             })
         }

@@ -1,12 +1,13 @@
+/** This extension provides a code liniting extension for the editor. */
+
 import {syntaxTree} from "@codemirror/language"
 import { linter, Diagnostic } from "@codemirror/lint"
 import { EditorState } from "@codemirror/state"
-import { ErrorInfoStruct } from "../session/sessionApi"
-import CellInfo from "./CellInfo"
+import { ErrorInfoStruct } from "../../session/sessionApi"
+import { CellInfo } from "./CellInfo"
+import { getDocState } from "./repdocState"
 
-import { getDocState } from "./interactiveCode"
-
-export const repdoclint = linter(view => {
+export const repdocLint = linter(view => {
   let diagnostics: Diagnostic[] = []
 
   let docState = getDocState(view.state)
