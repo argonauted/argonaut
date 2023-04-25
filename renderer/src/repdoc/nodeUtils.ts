@@ -1,11 +1,30 @@
 /** This document provides some utility functions for manipulating nodes of the parsed document tree. */
 
 import { SyntaxNode, NodeProp } from "@lezer/common"
-import { DocState } from "./repdocState"
 
 //========================================================
 // Syntax Node Helper Functions
 //========================================================
+
+//------------------
+// name based
+//------------------
+
+export function isContentCell(nodeName: string) {
+    return nodeName == "Cell" || nodeName == "EndCell"
+}
+
+export function isEmptyCell(nodeName: string) {
+    return nodeName == "EmptyCell" || nodeName == "EmptyEnd"
+}
+
+export function isCell(nodeName: string) {
+    return nodeName == "Cell" || nodeName == "EndCell" || nodeName == "EmptyCell" || nodeName == "EmptyEnd"
+}
+
+//----------------
+// node based
+//----------------
 
 export function isCellNode(node: SyntaxNode) {
     let groupVal = node.type.prop(NodeProp.group)
@@ -25,17 +44,6 @@ export function getAssociatedCellNode(node: SyntaxNode) {
 export function getPrevCellNode(cellNode: SyntaxNode) {
     //WILL BE NULL FOR FIRST LINE
     return cellNode.prevSibling
-}
-
-export function getCellInfo(cellNode: SyntaxNode, docState: DocState) {
-    if (cellNode !== null) {
-        let prevCellInfo = docState.cellInfos.find(cellInfo => cellInfo.from == cellNode!.from)
-        //DOH! I probably need to check if the new editor state matches the doc state 
-        if (prevCellInfo !== undefined) {
-            return prevCellInfo
-        }
-    }
-    return null
 }
 
 /** Returns the index of the child node in the parent. Returns -1 if the child is not in the parent. */

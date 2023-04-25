@@ -1,11 +1,13 @@
 /** This file provides functions to look up values based on parsed document nodes. */
 
 import { SyntaxNode } from "@lezer/common"
-import { getDocState } from "./repdocState"
-import { lookupCellValue, RValueStruct } from "./sessionValues"
 import { EditorState } from "@codemirror/state"
-import { libVarData } from "./sessionPackageData"
-import { getParentCellNodes, getPrevCellNode, getCellInfo, getChildIndex  } from "./nodeUtils"
+import { RValueStruct } from "../../session/sessionTypes"
+import { getParentCellNodes, getPrevCellNode, getChildIndex  } from "../nodeUtils"
+import { getDocState } from "../document/repdocState"
+import { cellInfoUpToDate, getCellInfoByFrom } from "../document/CellInfo"
+import { lookupCellValue } from "../sessionData/sessionValues"
+import { libVarData } from "../sessionData/sessionPackageData"
 
 //========================================================
 // Value Lookup Functions
@@ -54,8 +56,8 @@ function getVarValueForCell(varName: string, associatedNode: SyntaxNode, state: 
         //NOTE - I NEED TO HANDLE FIRST LINE. IT WILL TAKE A DIFFERENT LOOKUP
         if(lookupNode !== null) {
             //lokup value from cell (must update when we process functions blocks)
-            let reqCellInfo = getCellInfo(lookupNode, docState)
-            if (reqCellInfo !== null && reqCellInfo!.isUpToDate()) {
+            let reqCellInfo = getCellInfoByFrom(lookupNode.from, docState.cellInfos)
+            if (reqCellInfo !== null && cellInfoUpToDate(reqCellInfo!)) {
                 let varValue = lookupCellValue(varName, reqCellInfo.cellEnv, docState.varTable, functionOnly)
                 if(varValue) {
                     return varValue

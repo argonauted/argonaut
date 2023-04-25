@@ -1,9 +1,9 @@
 /** This file contains a class to give the DOM element for a cell variable display, which displays a single
  * line output for a cell/line , similar to what a debugger might do.. */
 
-import CellInfo from "./CellInfo"
-import {getShortInfo} from "./displayValues"
 import {WidgetType} from "@codemirror/view"
+import {getShortInfo} from "../sessionData/displayValues"
+import { CellInfo } from "./CellInfo"
 
 export default class VarDisplay extends WidgetType {
     cellInfo: CellInfo

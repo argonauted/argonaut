@@ -1,13 +1,14 @@
 /** This file holds the code completions extensions for repdoc */
 
+import { RLanguage } from "../../../argonaut-lezer-r/src"
 import { syntaxTree } from "@codemirror/language"
 import { CompletionContext } from "@codemirror/autocomplete"
 import { SyntaxNode } from "@lezer/common"
 import { StateField } from "@codemirror/state"
 import { OptionsInfo, TRIGGER_FUNCTION_MAP, getIdentifierNodeOptions, getGlblStdComps } from "./nodeOptions"
-import { libCompletionVarNames, libCompletionVarTypes } from "./sessionPackageData"
+import { libCompletionVarNames, libCompletionVarTypes } from "../sessionData/sessionPackageData"
 
-import { RLanguage } from "../../argonaut-lezer-r/src"
+
 
 //=================================
 // Fields and Contstants

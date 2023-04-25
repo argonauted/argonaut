@@ -3,9 +3,8 @@
 import {syntaxTree} from "@codemirror/language"
 import { linter, Diagnostic } from "@codemirror/lint"
 import { EditorState } from "@codemirror/state"
-import { ErrorInfoStruct } from "../session/sessionApi"
-import CellInfo from "./CellInfo"
-
+import { ErrorInfoStruct } from "../../session/sessionApi"
+import { CellInfo } from "./CellInfo"
 import { getDocState } from "./repdocState"
 
 export const repdocLint = linter(view => {

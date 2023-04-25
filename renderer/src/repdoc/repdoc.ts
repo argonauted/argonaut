@@ -3,12 +3,12 @@
 import {EditorView} from "@codemirror/view"
 import type { Extension} from '@codemirror/state'
 
-import { repdocLint } from './repdocLint'
-import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./repdocCompletions"
-import { repdocHover } from "./repdocHover"
-import { repdocCursorContext } from "./repdocCursorContext"
+import { repdocLint } from './document/repdocLint'
+import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./contextInfo/repdocCompletions"
+import { repdocHover } from "./contextInfo/repdocHover"
+import { repdocCursorContext } from "./contextInfo/repdocCursorContext"
 
-import { repdocState } from "./repdocState"
+import { repdocState } from "./document/repdocState"
 
 //===================================
 // Theme

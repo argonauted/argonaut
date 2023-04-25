@@ -1,11 +1,12 @@
 /** This file provides functions to give completion options based on nodes of the parsed document tree. */
 
 import { SyntaxNode } from "@lezer/common"
-import { getDocState } from "./repdocState"
 import { EditorState } from "@codemirror/state"
+import { getChildIndex, getPrevCellNode, getParentCellNodes } from "../nodeUtils"
+import { getDocState } from "../document/repdocState"
+import { cellInfoUpToDate, getCellInfoByFrom } from "../document/CellInfo"
+import { getListNames } from "../sessionData/sessionValues"
 import { getExprNodeValue } from "./nodeValues"
-import { getChildIndex, getCellInfo, getPrevCellNode, getParentCellNodes } from "./nodeUtils"
-import { getListNames } from "./sessionValues"
 
 //ADD INFO AND DETAIL?
 export type OptionsInfo = {
@@ -55,8 +56,8 @@ export function getGlblStdComps(identifierNode: SyntaxNode, state: EditorState, 
         let prevCellNode = getPrevCellNode(cellNode)
         if(prevCellNode !== null) {
             //WE DON'T HANDLE FIRST LINE PROPERLY!
-            let prevCellInfo = getCellInfo(prevCellNode, docState)
-            if (prevCellInfo !== null && prevCellInfo!.isUpToDate()) {
+            let prevCellInfo = getCellInfoByFrom(prevCellNode.from, docState.cellInfos)
+            if (prevCellInfo !== null && cellInfoUpToDate(prevCellInfo!)) {
                 let names = Object.keys(prevCellInfo.cellEnv)
                 let typeInfo = new Array(names.length).fill("variable")
 

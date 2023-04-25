@@ -1,8 +1,8 @@
 /** This file loads and maintain the package level data from the session. This is common to all
  * docSessions. */
 
-import { addEventListener, EventPayload } from "../session/sessionApi"
-import { PkgData } from "./sessionValues"
+import { addEventListener, EventPayload } from "../../session/sessionApi"
+import { PkgData } from "../../session/sessionTypes"
 
 //The values for the package members
 export let libVarData: PkgData[] = []

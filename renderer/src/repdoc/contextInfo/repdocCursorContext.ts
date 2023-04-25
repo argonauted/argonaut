@@ -1,11 +1,12 @@
 /** This file holds a cursor context extension, which gives context regarding the cursor position as a tooltip. */
 
-import { syntaxTree } from "@codemirror/language"
 import { SyntaxNode } from "@lezer/common"
+import { syntaxTree } from "@codemirror/language"
 import { EditorView, Tooltip, showTooltip } from "@codemirror/view"
 import { EditorState, StateField } from "@codemirror/state"
+import { isCellNode } from "../nodeUtils"
 import { getIdentifierNodeValue } from "./nodeValues"
-import { isCellNode } from "./nodeUtils"
+
 //========================================================
 // Cursor Tooltip
 //========================================================

@@ -1,10 +1,5 @@
 /** This file provides functions to get display information for value objects from the session. */
-import { RValueStruct } from "./sessionValues"
-
-export type VarInfo = {
-    label: string,
-    value: RValueStruct
-}
+import { RValueStruct } from "../../session/sessionTypes"
 
 //TODO - cleanup type info and exclamation marks
 

@@ -1,4 +1,4 @@
-import { DocEnvUpdateData, RValueStruct, CellEnv, PkgData } from "../repdoc/sessionValues" 
+import { DocEnvUpdateData, RValueStruct, CellEnv, PkgData } from "./sessionTypes" 
 
 const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 

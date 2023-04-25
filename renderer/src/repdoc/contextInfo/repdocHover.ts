@@ -3,8 +3,8 @@
 import { syntaxTree } from "@codemirror/language"
 import { SyntaxNode } from "@lezer/common"
 import { EditorView, Tooltip, hoverTooltip } from "@codemirror/view"
+import { RValueStruct } from "../../session/sessionTypes"
 import { getIdentifierNodeValue } from "./nodeValues"
-import { RValueStruct } from "./sessionValues"
 
 //========================================================
 // Hover Tooltip
