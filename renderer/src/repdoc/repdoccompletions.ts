@@ -22,7 +22,6 @@ type CompletionCacheInfo = {
     from: number
 }
 
-
 let savedContext: CompletionContext | null
 let savedData: CompletionCacheInfo | null
 
@@ -64,7 +63,7 @@ function getMainCompletions(context: CompletionContext) {
 
         let triggerFunction = TRIGGER_FUNCTION_MAP[nodeName]
         if(triggerFunction !== undefined) {
-            //check for a trigger node
+            //handle completions from "trigger nodes" (things like the "$" operator)
             let parentNode = containingNode.parent
             if(parentNode !== null) {
                 optionsInfo = triggerFunction(parentNode!,context.state)
@@ -73,15 +72,16 @@ function getMainCompletions(context: CompletionContext) {
             startPos = containingNode.to
         }
         else  if(nodeName == "Identifier") {
-            //handle identifier nodes
+            //handle identifier node completions
             optionsInfo = getIdentifierNodeOptions(containingNode, context.state)
             //start at the start of the identifier node
             startPos = containingNode.from
         }
-
+        
+        //construct the completions
         if(optionsInfo != null) {
             if(optionsInfo.nonStdOptions !== undefined) {
-                //NEED TO CHECK STD FLAG!!!
+                //TODO: NEED TO CHECK STD FLAG!!!
                 let valueList = optionsInfo.nonStdOptions.names
                 let valueTypeInfo = optionsInfo.nonStdOptions.typeInfo 
                 return makeWordListResponse(valueList,valueTypeInfo,startPos!)
@@ -112,7 +112,7 @@ function getPkgCompletions(context: CompletionContext) {
     if(libCompletionVarNames.length == 0) return undefined
 
     if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) { 
-        //IMPLEMENT FUNCTION OPTION!? 
+        //TODO: IMPLEMENT FUNCTION OPTION!? 
         if(savedData && savedData.useStdOptions) {
             return makeWordListResponse(libCompletionVarNames, libCompletionVarTypes, savedData.from)
         }
@@ -124,7 +124,7 @@ function getPkgCompletions(context: CompletionContext) {
 
 function getKeywordCompletions(context: CompletionContext) {
     if(savedContext && context.state.doc == savedContext?.state.doc && context.pos == savedContext.pos) {
-        //IMPLEMENT FUNCTION OPTION!? 
+        //TODO: IMPLEMENT FUNCTION OPTION!? 
         if(savedData && savedData.useStdOptions) {
             return makeWordListResponse(KEYWORDS, KEYWORD_TYPES, savedData.from)
         }

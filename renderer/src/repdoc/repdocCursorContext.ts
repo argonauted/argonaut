@@ -82,9 +82,8 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
         }
 
         //new tooltip
-        let fromInput = true
         let functionOnly = true
-        let result = getIdentifierNodeValue(calleeNode, state, fromInput, functionOnly)
+        let result = getIdentifierNodeValue(calleeNode, state, functionOnly)
         if(result !== null && result.valueData.fmt == "function") {
             let tooltip =  {
                 pos: calleeNode.from,

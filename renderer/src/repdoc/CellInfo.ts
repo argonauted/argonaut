@@ -302,14 +302,17 @@ export default class CellInfo {
                 params.varInfos = null
             }
             else {
-                params.varInfos =  lineDisplayDatas.map(lineDisplayData => {
+                params.varInfos = []
+                lineDisplayDatas.forEach(lineDisplayData => {
                     let value = (lineDisplayData.lookupKey !== undefined) ?
                         lookupDocValue(lineDisplayData.lookupKey, varTable) :
                         lineDisplayData.value
 
-                    return {
-                        label: lineDisplayData.label,
-                        value
+                    if(value !== undefined) {
+                        params.varInfos!.push({
+                            label: lineDisplayData.label,
+                            value
+                        })
                     }
                 })
             }

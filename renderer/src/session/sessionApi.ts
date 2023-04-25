@@ -1,4 +1,4 @@
-import { DocEnvUpdateData } from "../repdoc/sessionValues" 
+import { DocEnvUpdateData, RValueStruct, CellEnv, PkgData } from "../repdoc/sessionValues" 
 
 const ERROR_REGEX = /^<text>:[0-9]?:[0-9]?:/
 
@@ -17,7 +17,7 @@ export type CodeCommand = {
 export interface LineDisplayData  {
     label: string
     lookupKey?: string
-    value?: any
+    value?: RValueStruct
 }
 
 export type SessionOutputData = {
@@ -30,7 +30,7 @@ export type SessionOutputData = {
     cellEvalCompleted?: boolean
     outputVersion?: number
     lineDisplayDatas?: LineDisplayData[]
-    cellEnv?: Record<string,string>
+    cellEnv?: CellEnv
     docEnvUpdate?: DocEnvUpdateData
     docEvalCompleted?: boolean
     nextLineIndex1?: number
@@ -53,8 +53,9 @@ export type ErrorInfoStruct = {
     msg: string
 }
 
-export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | any  /* DOH! fix this*/ |
-                           null /* initComplete */
+export type EventPayload = SessionOutputEvent[]  /* sessionOutput */ | 
+                            PkgData  /* DOH! fix this*/ |
+                            null /* initComplete */
   
 /** This is the format used in the sendCommand function for a RSession request. */
 type SessionRequestWrapper = {

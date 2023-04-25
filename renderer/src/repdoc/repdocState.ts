@@ -1,12 +1,12 @@
 /** This file holds the repdocState extension, which manages the repdoc State, bridging the editor with the R session.  */
 
-import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID} from "../session/sessionApi"
+import {CodeCommand,evaluateSessionCmds,SessionOutputEvent,setMaxEvalLine1,PRE_LINE_ID, SessionOutputData} from "../session/sessionApi"
 import CellInfo from "./CellInfo"
 import {syntaxTree} from "@codemirror/language"
 import {EditorView, Decoration} from "@codemirror/view"
 import type { EditorState, Transaction, ChangeSet, Range, Text } from '@codemirror/state'
 import { RangeSet, StateField, StateEffect } from '@codemirror/state'
-import { sessionOutputEffect } from "../editor/sessionEvents"
+import { sessionOutputEffect } from "../editor/sessionToEditor"
 import { getSessionId } from "../editor/editorConfig"
 import { VarTable, getEmptyVarTable, getUpdatedVarTable } from "./sessionValues"
 
@@ -178,29 +178,29 @@ function processSessionMessages(transaction: Transaction, docState: DocState) {
 
             for(let i2 = 0; i2 < effect.value.length; i2++) {
                 //we are doing only one session for now
-                let sessionOutputData = effect.value[i2] as SessionOutputEvent
-                if(sessionOutputData.lineId !== null) {
-                    if(sessionOutputData.data.docEnvUpdate !== undefined) {
-                        varTable = getUpdatedVarTable(varTable, sessionOutputData.data.docEnvUpdate)
+                let sessionOutputEventData = effect.value[i2] as SessionOutputEvent
+                if(sessionOutputEventData.lineId !== null) {
+                    if(sessionOutputEventData.data.docEnvUpdate !== undefined) {
+                        varTable = getUpdatedVarTable(varTable, sessionOutputEventData.data.docEnvUpdate)
                     }
 
-                    if(sessionOutputData.lineId == PRE_LINE_ID) {
+                    if(sessionOutputEventData.lineId == PRE_LINE_ID) {
                         //special case - initialization of document
                         newCellInfos = docState.cellInfos
                     }
                     else {
-                        let index = getCellInfoIndex(sessionOutputData.lineId,newCellInfos)
+                        let index = getCellInfoIndex(sessionOutputEventData.lineId,newCellInfos)
                         if(index >= 0) {
-                            newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputData.data, varTable)
+                            newCellInfos[index] = CellInfo.updateCellInfoDisplay(transaction.state,newCellInfos[index], sessionOutputEventData.data, varTable)
                         }
                         else {
-                            console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputData))
+                            console.error("Session output received but line number not found: " + JSON.stringify(sessionOutputEventData))
                         }
                     }
                 }
                 else {
                     //figure out where we want to print this
-                    printNonLineOutput(sessionOutputData)
+                    printNonLineOutput(sessionOutputEventData)
                 }
             }
 
@@ -217,9 +217,9 @@ function getCellInfoIndex(lineId: string, cellInfos: CellInfo[]) {
 }
 
 //fix the type here
-function printNonLineOutput(sessionOutputData: any) {
-    if(sessionOutputData.data.addedConsoleLines !== undefined) {
-        let lines = sessionOutputData.data.addedConsoleLines
+function printNonLineOutput(sessionOutputEventData: SessionOutputEvent) {
+    if(sessionOutputEventData.data.addedConsoleLines !== undefined) {
+        let lines = sessionOutputEventData.data.addedConsoleLines
         for(let i = 0; i < lines.length; i++) {
             if(lines[i][0] == "stdout") {
                 console.log(lines[i][1])

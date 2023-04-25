@@ -2,8 +2,8 @@ import * as React from "react"
 import { renderAppElement, displayLoadingScreen, initUi } from "./appframe/appUi"
 import { DocSession, DocSessionUpdate, TabState, AppFunctions } from "./appTypes"
 import { getEditor, getEditorText, destroyEditor } from "./editor/editor"
-import { sessionOutputToView } from "./editor/sessionEvents"
-import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent,initDoc} from "./session/sessionApi"
+import { sessionOutputToEditorView } from "./editor/sessionToEditor"
+import {startSessionListener,addEventListener,EventPayload,SessionOutputEvent} from "./session/sessionApi"
 
 
 //start app
@@ -54,7 +54,7 @@ function onSessionOutput(eventName: string, data: EventPayload) {
             let docSession = docSessions[docSessionId]
             let editor = docSession.editor
             if(editor !== null) {
-                sessionOutputToView(editor, data)
+                sessionOutputToEditorView(editor, data)
             }
             else {
                 console.log("Session event for session with null editor")

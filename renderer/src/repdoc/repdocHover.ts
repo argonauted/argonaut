@@ -4,6 +4,7 @@ import { syntaxTree } from "@codemirror/language"
 import { SyntaxNode } from "@lezer/common"
 import { EditorView, Tooltip, hoverTooltip } from "@codemirror/view"
 import { getIdentifierNodeValue } from "./nodeValues"
+import { RValueStruct } from "./sessionValues"
 
 //========================================================
 // Hover Tooltip
@@ -16,9 +17,8 @@ export const repdocHover = hoverTooltip((view: EditorView, pos: number, side: 1|
         let nodeName = containingNode.name
         if (nodeName == "Identifier") {
             //use general var names
-            let fromInput = true //FIX THIS!!!
             let functionOnly = false //is this oko?
-            let result = getIdentifierNodeValue(containingNode, view.state, fromInput, functionOnly)
+            let result = getIdentifierNodeValue(containingNode, view.state, functionOnly)
             if(result !== null) {
                 return getTooltipInfo(result.name, result.valueData, containingNode.from, containingNode.to)
             }
@@ -28,12 +28,12 @@ export const repdocHover = hoverTooltip((view: EditorView, pos: number, side: 1|
 })
 
 
-function getTooltipInfo(varName: string, value: any, startPos: number, endPos: number): Tooltip {
+function getTooltipInfo(varName: string, value: RValueStruct, startPos: number, endPos: number): Tooltip {
   return {
       pos: startPos,
       end: endPos,
       above: true,
-      create(view: any) {
+      create(view: EditorView) {
           let dom = document.createElement("div")
           dom.textContent = JSON.stringify(value,null,"  ") 
           return {dom}

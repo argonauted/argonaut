@@ -1,8 +1,8 @@
 /** This file provides functions to look up values based on parsed document nodes. */
 
 import { SyntaxNode } from "@lezer/common"
-import { getDocState  /*, DocState*/ } from "./repdocState"
-import { lookupCellValue } from "./sessionValues"
+import { getDocState } from "./repdocState"
+import { lookupCellValue, RValueStruct } from "./sessionValues"
 import { EditorState } from "@codemirror/state"
 import { libVarData } from "./sessionPackageData"
 import { getParentCellNodes, getPrevCellNode, getCellInfo, getChildIndex  } from "./nodeUtils"
@@ -15,12 +15,12 @@ import { getParentCellNodes, getPrevCellNode, getCellInfo, getChildIndex  } from
  * represent a variable directly or a child of a variable through an expression,
  * such as the $ expeession. 
  * It returns a vlue structure if the value can be determined and null if not */
-export function getIdentifierNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput: boolean, functionOnly: boolean) {
+export function getIdentifierNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly: boolean) {
     let parentNode = identifierNode.parent
     if(parentNode !== null) {
         let lookupFunc = parentToValueFuncMap[parentNode.name]
         if(lookupFunc) {
-            return lookupFunc(identifierNode,state,fromInput,functionOnly)
+            return lookupFunc(identifierNode,state,functionOnly)
         } 
     }
     return null
@@ -29,9 +29,9 @@ export function getIdentifierNodeValue(identifierNode: SyntaxNode, state: Editor
 /** This returns the value object associatee with an evaluated expression.
  * IMPLEMENT THIS!?
  */
-export function getExprNodeValue(exprNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+export function getExprNodeValue(exprNode: SyntaxNode, state: EditorState, functionOnly = false) {
     if(exprNode.type.name == "Identifier") {
-        return getIdentifierNodeValue(exprNode,state,fromInput,functionOnly)
+        return getIdentifierNodeValue(exprNode,state,functionOnly)
     }
     return null
 }
@@ -41,8 +41,10 @@ export function getExprNodeValue(exprNode: SyntaxNode, state: EditorState, fromI
 //========================================================
 
 /** This function returns the value for the given variable name, where the variable is sourced from the "associatedNode". This
- * node should be the identifier giving the variable name, of an parent node up to the containing cell node. */
-function getVarValueForCell(varName: string, associatedNode: SyntaxNode, state: EditorState, fromInput=true, functionOnly=false): any {
+ * node should be the identifier giving the variable name, of an parent node up to the containing cell node. 
+ * The functionOnly argument indicates if the return value should be limited to functions.
+ * The fromInput argument indicates if the avlue should be taken from the cell inputs (as opposed to cell outputs). */
+function getVarValueForCell(varName: string, associatedNode: SyntaxNode, state: EditorState, functionOnly=false, fromInput=true): RValueStruct | undefined {
     //ONLY IMPLMENTED FOR SCRIPT LEVEL CELL NODES AND THEIR DIRECT CHILDREN!
     let cellNodes = getParentCellNodes(associatedNode)
     if(cellNodes.length == 1) {
@@ -71,14 +73,14 @@ function getVarValueForCell(varName: string, associatedNode: SyntaxNode, state: 
         }
     }
 
-    return null
+    return undefined
 }
 
 //====================================================
 // NODE VALUE LOOKUP FUNCTIONS
 //====================================================
 
-type ValueLookupFunction = (identifierNode: SyntaxNode, state: EditorState, fromInput: boolean, functionOnly: boolean) => {name: string, valueData: any} | null
+type ValueLookupFunction = (identifierNode: SyntaxNode, state: EditorState, functionOnly: boolean) => {name: string, valueData: RValueStruct} | null
 
 
 /** STANDRD VALUE LOOKUP CASE - This lookup takes an identifier node and returns the value of the variable with that name for that cell.
@@ -86,10 +88,10 @@ type ValueLookupFunction = (identifierNode: SyntaxNode, state: EditorState, from
  * - fromInput - If true, the variable value is read from the cell input. Otherwise the variable value is read from the cell output.
  * - functionOnly - The value for the name is restricted to being a function
  */
-function getVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getVarNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false, fromInput = true) {
     let name = state.doc.sliceString(identifierNode.from,identifierNode.to)
-    let valueData: any = getVarValueForCell(name, identifierNode, state, fromInput, functionOnly)
-    if(valueData != null) {
+    let valueData = getVarValueForCell(name, identifierNode, state, functionOnly, fromInput)
+    if(valueData != undefined) {
         return {name, valueData}
     }
     return null
@@ -97,7 +99,7 @@ function getVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInp
 
 /** STD CALL CASE II - This function takes an identifier node that appears inside an ArgValueNode. It checks if this is
  * a name node, for which it returns no value, or a "default" node, which returns an in-scope matching variable name, if applicable. */
-function getArgValueNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getArgValueNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     let childIndex = getChildIndex(identifierNode)
     if(childIndex == 0 && identifierNode.nextSibling !== null) {
         //name node
@@ -105,7 +107,7 @@ function getArgValueNodeValue(identifierNode: SyntaxNode, state: EditorState, fr
     }
     
     //value node
-    return getVarNodeValue(identifierNode,state,fromInput,functionOnly)
+    return getVarNodeValue(identifierNode,state,functionOnly)
 }
 
 /** FUNCTION DEFINITION - This is an identifier that appears in a parameter list for a function definition. The first node
@@ -114,7 +116,7 @@ function getArgValueNodeValue(identifierNode: SyntaxNode, state: EditorState, fr
  * parent/cell environmment.
  * IMPLEMENT FIRST VALUE WHEN WE DIVE INTO FUNCTIONS.
  */
-function getParamValueNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getParamValueNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     return null
 }
 
@@ -126,7 +128,7 @@ function getParamValueNodeValue(identifierNode: SyntaxNode, state: EditorState, 
  * FOR NOW we will return the wrong value here.
  * NOTE - We ignore the input value of fromInput. It is calculated based on the assign statement.
  */
-function getAssignVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getAssignVarNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     let childIndex = getChildIndex(identifierNode)
     let isLeftIdentifier = childIndex == 0
     let assignNode = isLeftIdentifier ? identifierNode.nextSibling : identifierNode.prevSibling
@@ -135,18 +137,18 @@ function getAssignVarNodeValue(identifierNode: SyntaxNode, state: EditorState, f
     let assignChars = assignNode.type.name
     let isRhsOp = assignChars == "->" || assignChars == "->>" 
 
-    fromInput = (isLeftIdentifier == isRhsOp)
-    return getVarNodeValue(identifierNode,state,fromInput,functionOnly)
+    let fromInput = (isLeftIdentifier == isRhsOp)
+    return getVarNodeValue(identifierNode,state,functionOnly,fromInput)
 }
 
 /** DOLLAR EXPR - This returns the value for an identifier as it appears in a dollar expression. If it is the first
  * node, the nromal value will be returned. if it is the second node, it is the child of the value given by the first node.
  */
-function getDollarVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getDollarVarNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     let childIndex = getChildIndex(identifierNode)
     if(childIndex == 0) {
         //norm expression identifier
-        return getVarNodeValue(identifierNode,state,fromInput,functionOnly)
+        return getVarNodeValue(identifierNode,state,functionOnly)
     }
     else if(childIndex == 3) {
         //ADD THIS WHEN WE IMPLMENET GET EXPR NODE VALUE
@@ -159,12 +161,12 @@ function getDollarVarNodeValue(identifierNode: SyntaxNode, state: EditorState, f
 }
    
 /** NAMESPACE EXPRESSION NODE - ADD THIS LATER */
-function getNamespaceVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getNamespaceVarNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     return null
 }
 
 /** SLOT EXPRESSION NODE - ADD THIS LATER */
-function getSlotVarNodeValue(identifierNode: SyntaxNode, state: EditorState, fromInput = true, functionOnly = false) {
+function getSlotVarNodeValue(identifierNode: SyntaxNode, state: EditorState, functionOnly = false) {
     return null
 }
 

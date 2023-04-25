@@ -1,7 +1,7 @@
 /** This file provides functions to give completion options based on nodes of the parsed document tree. */
 
-import { SyntaxNode, NodeProp } from "@lezer/common"
-import { getDocState, DocState } from "./repdocState"
+import { SyntaxNode } from "@lezer/common"
+import { getDocState } from "./repdocState"
 import { EditorState } from "@codemirror/state"
 import { getExprNodeValue } from "./nodeValues"
 import { getChildIndex, getCellInfo, getPrevCellNode, getParentCellNodes } from "./nodeUtils"
