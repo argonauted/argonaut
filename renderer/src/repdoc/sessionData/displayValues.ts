@@ -5,39 +5,86 @@ import { RValueStruct } from "../../session/sessionTypes"
 
 export interface ShortInfo {
     typeInfo: string
-    valueInfo: string
-    addedInfo: string
+    dataLabel?: string
+    data?: string
 }
 
-export function getShortInfo(valueJson: RValueStruct): ShortInfo {
+export function getShortInfo(label: string, valueJson: RValueStruct): HTMLElement | null {
     if(valueJson === null) {
-        return {typeInfo: "", valueInfo: "null", addedInfo: ""}
+        return null
     }
 
+    let shortInfo: ShortInfo | undefined = undefined
     switch(valueJson.fmt) {
         case "vector":
-            return getVectorShortInfo(valueJson)
+            shortInfo = getVectorShortInfo(valueJson)
+            break
 
         case "factor":
-            return getFactorShortInfo(valueJson)
+            shortInfo = getFactorShortInfo(valueJson)
+            break
 
         case "function":
-            return getFunctionShortInfo(valueJson)
+            shortInfo = getFunctionShortInfo(valueJson)
+            break
 
         case "matrix":
         case "array":
-            return getArrayShortInfo(valueJson)
+            shortInfo = getArrayShortInfo(valueJson)
+            break
 
         case "list":
-            return getListShortInfo(valueJson)
+            shortInfo = getListShortInfo(valueJson)
+            break
 
         case "data.frame":
-            return getDataFrameShortInfo(valueJson)
+            shortInfo = getDataFrameShortInfo(valueJson)
+            break
 
         case "atomic":
         case "recursive":
         default:
-            return getOtherShortInfo(valueJson)
+            shortInfo = getOtherShortInfo(valueJson)
+            break
+    }
+
+    if(shortInfo !== undefined) {
+        let element = document.createElement("span")
+        element.className = "cm-vd-shortWrapper"
+
+        let nameSpan = document.createElement("span")
+        nameSpan.className = "cm-vd-varName"
+        nameSpan.textContent = label + ":"
+        element.appendChild(nameSpan)
+
+        element.appendChild(document.createTextNode(" "))
+
+        let typeSpan = document.createElement("span")
+        typeSpan.className = "cm-vd-varName"
+        typeSpan.textContent = shortInfo.typeInfo
+        element.appendChild(typeSpan)
+
+        if(shortInfo.dataLabel !== undefined) {
+            element.appendChild(document.createTextNode(" "))
+
+            let listLabelSpan = document.createElement("span")
+            listLabelSpan.className = "cm-vd-listLabel cm-vd-notFirst"
+            listLabelSpan.textContent = shortInfo.dataLabel + ":"
+            element.appendChild(listLabelSpan)
+        }
+        if(shortInfo.data !== undefined) {
+            element.appendChild(document.createTextNode(" "))
+
+            let listValuesSpan = document.createElement("span")
+            listValuesSpan.className = "cm-vd-listBody"
+            listValuesSpan.textContent = shortInfo.data
+            element.appendChild(listValuesSpan)
+        }
+
+        return element
+    }
+    else {
+        return null
     }
 }
 
@@ -53,73 +100,62 @@ function getSerializedClass(valueJson: RValueStruct) {
 
 function getVectorShortInfo(valueJson: RValueStruct) {
     let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
-    let valueInfo = valueJson.data.join("  ")
-    if(valueJson.data.length < valueJson.len!) {
-        valueInfo += "..."
-    }
-    return {typeInfo,valueInfo,addedInfo: ""}
+    let valueList = getListValue(valueJson.data,valueJson.len!)
+    return {typeInfo,dataLabel: "Value",data: valueList}
 }
 
 function getArrayShortInfo(valueJson: RValueStruct) {
-    let typeInfo = `${getSerializedClass(valueJson)} ${valueJson.atom}[${valueJson.dim!.join(", ")}]`
-    let valueInfo = ""
-    return {typeInfo,valueInfo,addedInfo: ""}
+    let typeInfo = `${getSerializedClass(valueJson)} ${valueJson.type}[${valueJson.dim!.join(", ")}]`
+    return {typeInfo}
 }
 
 function getFactorShortInfo(valueJson: RValueStruct) {
     let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
-    let valueInfo = valueJson.data.join("  ")
-    if(valueJson.data.length < valueJson.len!) {
-        valueInfo += "..."
-    }
-    let addedInfo = "levels: " + valueJson.levels!.join("  ")
-    if(valueJson.lvlsLen! < valueJson.levels!.length) {
-        addedInfo += "..."
-    }
-    return {typeInfo,valueInfo,addedInfo}
+    let valueList = getListValue(valueJson.data,valueJson.len!)
+    return {typeInfo,dataLabel: "Value",data: valueList}
 }
 
 function getListShortInfo(valueJson: RValueStruct) {
     let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.len}]`
-    let valueInfo = ""
-    let addedInfo = getListNamesString(valueJson)
-    return {typeInfo,valueInfo,addedInfo}
-}
 
-function getListNamesString(valueJson: RValueStruct) {
     if(valueJson.names === undefined) {
-        return "unnamed list"
+        return {typeInfo,data:"unnamed list"}
     }
     else { 
-        let names = valueJson.names.map((name: string) => name !== "" ? name : "(no name)" ).join("  ")
-        if(names.length < valueJson.len!) names += "..."
-        return "names = " + names
+        let names = getNameListValue(valueJson.names,valueJson.len!)
+        return {typeInfo,dataLabel: "Names",data: names}
     }
 }
 
 function getDataFrameShortInfo(valueJson: RValueStruct) {
     let typeInfo = `${getSerializedClass(valueJson)}[${valueJson.dim!.join(", ")}]`
-    let valueInfo = ""
-    let addedInfo = getDataFrameNamesString(valueJson)
-    return {typeInfo,valueInfo,addedInfo}
-}
-
-function getDataFrameNamesString(valueJson: RValueStruct) {
     if(valueJson.colNames === undefined) {
-        return "<unnamed columns>"
+        return {typeInfo,data:"unnamed columns"}
     }
     else { 
-        let text = valueJson.colNames.join("  ")
-        if(valueJson.colNames.length < valueJson.dim![1]) text += "..."
-        return "col names = " + text
+        let colNames = getNameListValue(valueJson.colNames,valueJson.dim![1])
+        return {typeInfo,dataLabel: "Col names",data: colNames}
     }
 }
 
 function getFunctionShortInfo(valueJson: RValueStruct) {
-    return {typeInfo: `function${valueJson.paramList}`, valueInfo: "", addedInfo: ""}
+    return {typeInfo: `function${valueJson.paramList}`}
 }
 
 function getOtherShortInfo(valueJson: RValueStruct) {
-    return { typeInfo: valueJson.class!, valueInfo: "", addedInfo: "" }
+    return {typeInfo: valueJson.class!}
 }
 
+function getListValue(listJson: [], realLength: number) {
+    let valueList = listJson.join("  ")
+    if(listJson.length < realLength) {
+        valueList += "..."
+    }
+    return valueList
+}
+
+function getNameListValue(nameListJson: string[],realLength: number) {
+    let names = nameListJson.map((name: string) => name !== "" ? name : "(no name)" ).join("  ")
+    if(names.length <realLength) names += "..."
+    return names
+}
