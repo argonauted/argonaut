@@ -19,66 +19,65 @@ export const repdocTheme = EditorView.baseTheme({
   "&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(180,180,180,0.5)"},
   "&dark .cm-rd-codeDirtyShade": {backgroundColor: "rgba(52,26,0,0.5)"},
   "&dark .cm-rd-valuePendingShade": {backgroundColor: "rgba(31,31,31,0.5)"},
-
-  //"&light .cm-vardisplay-main": {color: "rgb(60,60,60)", backgroundColor: "rgb(253,234,210)", marginLeft: "15px"},
-  //"&light .cm-vardisplay-label": {paddingLeft: "5px"},
-  //"&light .cm-vardisplay-value": {fontStyle: "italic"},
-  //"&light .cm-vardisplay-added": {fontStyle: "italic", paddingRight: "5px" },
     
   //==================
   // Var Display CSS
   //==================
-  "&light .cm-vd-shortWrapper": {
-
+  "&light .cm-vardisplay-main": { 
+    "backgroundColor": "rgb(249,213,166)", 
+    "marginLeft": "15px",
+    "opacity": ".5",
+    "paddingLeft": "5px",
+    "paddingRight": "5px"
+  },
+  "&light .cm-vd-fullContainer": {
+    "backgroundColor": "#f5f5f5"
   },
 
-  "&light .cm-vardisplay-main": {
-    "color": "rgb(60,60,60)", 
-    "backgroundColor": "rgb(253,234,210)", 
-    "marginLeft": "15px"
-  },
-
-  "&light .cm-vd-listLabel": {
-    "fontSize": "14px",
-    "marginBottom": "5px",
-    "color": "#555555",
-    "fontFamily": "monospace"
-  },
-  "&light .cm-vd-notFirst": {
-    "marginLeft": "5px"
-  },
-  "&light .cm-vd-listBody": {
-    "fontSize": "14px",
-    "marginBottom": "5px",
-    "color": "#000000",
+  "&light .cm-vd-wrapperSpan": {
     "fontFamily": "monospace",
-    "marginLeft": "5px"
+    "color": "#000000"
   },
 
   "&light .cm-vd-varTable": {
     "borderCollapse": "collapse",
     "fontFamily": "monospace",
-    "fontSize": "14px",
-    "marginTop": "5px"
+    "margin": "5px"
   },
 
   "&light .cm-vd-varName": {
-    "fontSize": "14px",
-    "fontWeight": "bold",
-    "marginBottom": "5px",
-    "fontFamily": "monospace"
+    "color": "#0000d7"
   },
   "&light .cm-vd-varType": {
-    "fontFamily": "monospace",
-    "fontSize": "14px",
-    "marginBottom": "5px",
+    "color": "#383cf0"
+  },
+  "&light .cm-vd-listLabel": {
+    "color": "#444444",
+  },
+  "&light .cm-vd-notFirst": {
     "marginLeft": "5px"
   },
+  "&light .cm-vd-listBody": {
+    "marginLeft": "5px",
+    "color": "#222222",
+  },
+
+  "&light .cm-vd-titleContainer": {
+    "margin": "5px",
+  },
+  "&light .cm-vd-extraContainer": {
+    "margin": "5px",
+    "backgroundColor": "#e6e6e6"
+  },
+  "&light .cm-vd-linesContainer": {
+    "padding": "5px",
+  },
+
   "&light .cm-vd-tableNameCell": {
     "padding": "1px 3px",
     "textAlign": "center",
     "color": "#888888",
-    "backgroundColor": "#f2f2f2"
+    "backgroundColor": "#dadada"
   },
   "&light .cm-vd-verticalText": {
     "writingMode": "vertical-rl",
@@ -89,7 +88,7 @@ export const repdocTheme = EditorView.baseTheme({
     "textAlign": "center",
     "color": "#888888",
     "fontStyle": "italic",
-    "backgroundColor": "#f2f2f2"
+    "backgroundColor": "#dadada"
   },
   "&light .cm-vd-tableCornerCell": {
     "padding": "1px 3px"
@@ -98,12 +97,6 @@ export const repdocTheme = EditorView.baseTheme({
     "padding": "2px 5px",
     "textAlign": "center",
     "color": "#000000",
-    "backgroundColor": "#f7f7f7"
-  },
-  "&light .cm-vd-extraElementsContainer": {
-    "fontFamily": "monospace",
-    "fontSize": "14px",
-    "marginTop": "5px",
-    "backgroundColor": "#f7f7f7"
+    "backgroundColor": "#e6e6e6"
   }
 })

@@ -19,7 +19,7 @@ type TooltipInfo = {
 } 
 
 export function repdocCursorContext() {
-    return [cursorTooltipField, cursorTooltipBaseTheme]
+    return [cursorTooltipField/*, cursorTooltipBaseTheme*/]
 }
 
 const cursorTooltipBaseTheme = EditorView.baseTheme({

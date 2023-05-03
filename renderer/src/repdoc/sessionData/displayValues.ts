@@ -65,7 +65,7 @@ export function getShortDisplay(label: string, valueJson: RValueStruct): HTMLEle
 export function getFullDisplay(label: string, valueJson: RValueStruct): HTMLElement {
     let typeInfo: string | undefined
     let tableArgs: TableArgs | undefined
-    let extraElements: HTMLElement[] | undefined
+    let lineElements: HTMLElement[] | undefined
     switch(valueJson.fmt) {
         case "vector":
             typeInfo = getTypeInfoVector(valueJson)
@@ -75,7 +75,7 @@ export function getFullDisplay(label: string, valueJson: RValueStruct): HTMLElem
         case "factor":
             typeInfo = getTypeInfoVector(valueJson)
             tableArgs = getFactorFullInfo(valueJson)
-            extraElements = getFactorExtraElements(valueJson)
+            lineElements = getFactorExtraElements(valueJson)
             break
 
         case "function":
@@ -93,7 +93,7 @@ export function getFullDisplay(label: string, valueJson: RValueStruct): HTMLElem
 
         case "list":
             typeInfo = getTypeInfoVector(valueJson)
-            extraElements = getListExtraElements(valueJson)
+            lineElements = getListExtraElements(valueJson)
             break
 
         case "data.frame":
@@ -108,7 +108,7 @@ export function getFullDisplay(label: string, valueJson: RValueStruct): HTMLElem
             break
     }
 
-    return createFullElement(label,typeInfo,tableArgs,extraElements)
+    return createFullElement(label,typeInfo,tableArgs,lineElements)
 }
 
 //================================
@@ -145,9 +145,10 @@ function getTypeInfoOther(valueJson: RValueStruct) {
     return valueJson.class!
 }
 
+/** This creates a span element with the object name, type, dimension and optionally an a key-value pair */
 function getOneLinerElement(label: string, typeInfo: string, lineInfo?: LineInfo) {
     let element = document.createElement("span")
-    element.className = "cm-vd-shortWrapper"
+    element.className = "cm-vd-wrapperSpan"
 
     let nameSpan = document.createElement("span")
     nameSpan.className = "cm-vd-varName"
@@ -183,8 +184,10 @@ function getOneLinerElement(label: string, typeInfo: string, lineInfo?: LineInfo
     return element
 }
 
-function addKeyValueElement(label: string, data: string) {
-    let element = document.createElement("div")
+/** This creates a span element with a key-value pair */
+function getKeyValueLineElement(label: string, data: string) {
+    let element = document.createElement("span")
+    element.className = "cm-vd-wrapperSpan"
 
     let labelSpan = document.createElement("span")
     labelSpan.className = "cm-vd-listLabel"
@@ -201,20 +204,48 @@ function addKeyValueElement(label: string, data: string) {
     return element
 }
 
-function createFullElement(label: string, typeInfo: string, tableArgs?: TableArgs, extraElements?: HTMLElement[]) {
+/** This creates a div element containing a full element value */
+function createFullElement(label: string, typeInfo: string, tableArgs?: TableArgs, lineElements?: HTMLElement[]) {
     let element = document.createElement("div")
-    element.appendChild(getOneLinerElement(label, typeInfo))
-    element.appendChild(document.createElement("br"))
+    element.className = "cm-vd-fullContainer"
+    element.appendChild(getFullTitleElement(label, typeInfo))
     if(tableArgs !== undefined) {
         element.appendChild(createTable(tableArgs))
     } 
-    if(extraElements) {
-        extraElements.forEach(extraElement => element.appendChild(extraElement))
+    if(lineElements !== undefined) {
+        element.appendChild(getExtraElements(lineElements))
     }
 
     return element
 }
 
+function getFullTitleElement(label: string, typeInfo: string) {
+    let element = document.createElement("div")
+    element.className = "cm-vd-titleContainer"
+    element.appendChild(getOneLinerElement(label, typeInfo))
+    return element
+}
+
+function getExtraElements(lineElements: HTMLElement[]) {
+    let element = document.createElement("div")
+    element.className = "cm-vd-extraContainer"
+    lineElements.forEach(lineElement => {
+        let wrapperElement = document.createElement("div")
+        wrapperElement.className = "cm-vd-linesContainer"
+        wrapperElement.appendChild(lineElement)
+        element.appendChild(wrapperElement)
+    })
+    return element
+}
+
+
+// let wrapperElement = document.createElement("div")
+// wrapperElement.appendChild()
+// wrapperElement.className = "cm-vd-lineElementsContainer"
+// return wrapperElement
+
+//element.className = "cm-vd-lineElementsContainer"
+//return [element]
 
 function createTable({headerRows, headerCols, body, moreRows, moreCols, rowTypes}: TableArgs) {
     const numberHeaderCols = (headerCols !== undefined) ? headerCols.length : 0
@@ -450,9 +481,7 @@ function getFactorFullInfo(valueJson: RValueStruct) {
 }
 
 function getFactorExtraElements(valueJson: RValueStruct) {
-    let element = addKeyValueElement("Levels", getListValue(valueJson.levels!, valueJson.lvlsLen!))
-    element.className = "cm-vd-extraElementsContainer"
-    return [element]
+    return [getKeyValueLineElement("Levels", getListValue(valueJson.levels!, valueJson.lvlsLen!))]
 }
 
 function getMatrixFullInfo(valueJson: RValueStruct) {
@@ -478,10 +507,7 @@ function getListExtraElements(valueJson: RValueStruct) {
         let name = (valueJson.names !== undefined && valueJson.names.length > index) ? valueJson.names[index] : String(index + 1)
         if(name == '') name = String(index + 1)
 
-        let wrapperElement = document.createElement("div")
-        wrapperElement.appendChild(getShortDisplay(name,dataElement))
-        wrapperElement.className = "cm-vd-extraElementsContainer"
-        return wrapperElement
+        return getShortDisplay(name,dataElement)
     })
 }
 
