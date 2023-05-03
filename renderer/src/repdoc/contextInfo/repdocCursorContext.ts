@@ -6,6 +6,7 @@ import { EditorView, Tooltip, showTooltip } from "@codemirror/view"
 import { EditorState, StateField } from "@codemirror/state"
 import { isCellNode } from "../nodeUtils"
 import { getIdentifierNodeValue } from "./nodeValues"
+import { getFullDisplay } from "../sessionData/displayValues"
 
 //========================================================
 // Cursor Tooltip
@@ -94,7 +95,7 @@ function getFuncSigTooltipInfo(stdCallNode: SyntaxNode, tooltipInfo: TooltipInfo
                 create: () => {
                     let dom = document.createElement("div")
                     dom.className = "cm-tooltip-cursor"
-                    dom.textContent = result!.name + result!.valueData.paramList
+                    dom.appendChild(getFullDisplay(result!.name,result!.valueData)) 
                     return { dom }
                 }
             }

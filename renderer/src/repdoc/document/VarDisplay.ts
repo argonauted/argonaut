@@ -2,7 +2,8 @@
  * line output for a cell/line , similar to what a debugger might do.. */
 
 import {WidgetType} from "@codemirror/view"
-import {getShortInfo} from "../sessionData/displayValues"
+//import {getShortDisplay} from "../sessionData/displayValues"
+import {getFullDisplay} from "../sessionData/displayValues"
 import { CellInfo } from "./CellInfo"
 
 export default class VarDisplay extends WidgetType {
@@ -57,7 +58,8 @@ export default class VarDisplay extends WidgetType {
             if(this.isVisible) {
                 //only do first element for now
                 let firstVar = varInfos![0]
-                this.contentElement = getShortInfo(firstVar.label,firstVar.value)
+                //this.contentElement = getShortDisplay(firstVar.label,firstVar.value)
+                this.contentElement = getFullDisplay(firstVar.label,firstVar.value)
 
                 if(this.contentElement !== null) {
                     while(this.element.firstChild) this.element.removeChild(this.element.firstChild)

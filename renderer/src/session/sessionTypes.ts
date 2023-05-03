@@ -10,6 +10,10 @@ export type RValueStruct = {
     data?: any,
     names?: string[]
     colNames?: string[]
+    rowNames?: string[]
+    dimNames?: string[]
+    dimLabels?: string[]
+    colTypes?: string[]
     class?: string
     type?: string
     len?: number

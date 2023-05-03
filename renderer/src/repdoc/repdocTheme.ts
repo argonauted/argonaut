@@ -31,7 +31,7 @@ export const repdocTheme = EditorView.baseTheme({
   "&light .cm-vd-shortWrapper": {
 
   },
-  
+
   "&light .cm-vardisplay-main": {
     "color": "rgb(60,60,60)", 
     "backgroundColor": "rgb(253,234,210)", 
@@ -75,7 +75,7 @@ export const repdocTheme = EditorView.baseTheme({
     "marginLeft": "5px"
   },
   "&light .cm-vd-tableNameCell": {
-    "padding": "1px",
+    "padding": "1px 3px",
     "textAlign": "center",
     "color": "#888888",
     "backgroundColor": "#f2f2f2"
@@ -85,19 +85,25 @@ export const repdocTheme = EditorView.baseTheme({
     "textOrientation": "upright"
   },
   "&light .cm-vd-tableIndexCell": {
-    "padding": "1px",
+    "padding": "1px 3px",
     "textAlign": "center",
     "color": "#888888",
     "fontStyle": "italic",
     "backgroundColor": "#f2f2f2"
   },
   "&light .cm-vd-tableCornerCell": {
-    "padding": "3px"
+    "padding": "1px 3px"
   },
   "&light .cm-vd-tableValueCell": {
-    "padding": "5px",
+    "padding": "2px 5px",
     "textAlign": "center",
     "color": "#000000",
+    "backgroundColor": "#f7f7f7"
+  },
+  "&light .cm-vd-extraElementsContainer": {
+    "fontFamily": "monospace",
+    "fontSize": "14px",
+    "marginTop": "5px",
     "backgroundColor": "#f7f7f7"
   }
 })

@@ -5,6 +5,7 @@ import { SyntaxNode } from "@lezer/common"
 import { EditorView, Tooltip, hoverTooltip } from "@codemirror/view"
 import { RValueStruct } from "../../session/sessionTypes"
 import { getIdentifierNodeValue } from "./nodeValues"
+import { getFullDisplay } from "../sessionData/displayValues"
 
 //========================================================
 // Hover Tooltip
@@ -35,7 +36,7 @@ function getTooltipInfo(varName: string, value: RValueStruct, startPos: number, 
       above: true,
       create(view: EditorView) {
           let dom = document.createElement("div")
-          dom.textContent = JSON.stringify(value,null,"  ") 
+          dom.appendChild(getFullDisplay(varName,value)) 
           return {dom}
       }
   }
