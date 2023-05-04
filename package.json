@@ -11,8 +11,8 @@
     "electron": "~22.0.0"
   },
   "devDependencies": {
-    "typescript": "^4.9.4",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "typescript": "^4.9.4"
   },
   "author": "Dave Sutter"
 }

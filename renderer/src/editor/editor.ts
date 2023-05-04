@@ -3,6 +3,8 @@ import { initDoc } from "../session/sessionApi"
 
 import {EditorView, keymap} from "@codemirror/view"
 
+import { oneDark } from "./oneDarkTheme"
+
 import {setup} from "./setup"
 import {rlangsupport} from "../../argonaut-lezer-r/src"
 
@@ -36,7 +38,8 @@ export function getEditor(tabState: TabState, tabFunctions: AppFunctions, data: 
             //images(), //ignore the name - this does a console log printout of the parse tree
             repdoc(),
             rlangsupport(),
-            docchangedextension()
+            docchangedextension(),
+            oneDark
         ],
         parent: element
     })

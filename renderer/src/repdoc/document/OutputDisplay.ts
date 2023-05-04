@@ -13,6 +13,7 @@ export default class OutputDisplay extends WidgetType {
     activePlotCount: number = 0
     activeValueCount: number = 0
     isVisible = false
+    statusClass = "cm-outdisplay-clean"
 
     element: HTMLElement | null = null
     errorElement: HTMLElement | null = null
@@ -65,7 +66,7 @@ export default class OutputDisplay extends WidgetType {
     toDOM() {
         if(this.element === null) {
             this.element = document.createElement("div")
-            //this.element.appendChild(document.createTextNode(this.cellInfo.id))
+            this.element.className = this.getCssName()
             this.element.style.border = "1px solid #808080"
             this.element.style.padding = "5px"
             this.updateStatus()
@@ -93,12 +94,16 @@ export default class OutputDisplay extends WidgetType {
     private updateStatus() {
         if((this.element !== null)&&(this.activeStatus != this.cellInfo.status)) {
             this.activeStatus = this.cellInfo.status
-            let backgroundColor = this.activeStatus == "code dirty" ? "beige" :
-                                    this.activeStatus == "inputs dirty" ? "#808080" : 
-                                    this.activeStatus == "value pending" ? "#808080" : "#F0F0F8"
+            this.statusClass = this.activeStatus == "code dirty" ? "cm-outdisplay-code-dirty" :
+                                    this.activeStatus == "inputs dirty" ? "cm-outdisplay-inputs-dirty" : 
+                                    this.activeStatus == "value pending" ? "cm-outdisplay-pending" : "cm-outdisplay-clean"
                                      
-            this.element!.style.backgroundColor = backgroundColor
+            this.element!.className = this.getCssName() 
         }
+    }
+
+    private getCssName() {
+        return "cm-outputdisplay-base " + this.statusClass
     }
 
     private updateErrors() {

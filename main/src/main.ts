@@ -8,12 +8,17 @@ import path from 'path'
 let windows = []
 
 const APP_FILE = "./renderer/web/index.html"
+/*const APP_FILE = "./renderer/web/test.html"*/
 
 let rSession = new RSession()
 
 //=============================================
 // App/Electron Code
 //=============================================
+
+// custom title bar - se this package
+// https://github.com/AlexTorresDev/custom-electron-titlebar
+// npm i custom-electron-titlebar
 
 function createWindow(fileName) {
     // Create the browser window.
