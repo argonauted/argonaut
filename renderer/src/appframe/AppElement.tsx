@@ -12,6 +12,7 @@ interface AppProp {
 }
 
 export function AppElement({menuList, tabStateArray, selectedId, tabFunctions}: AppProp) {
+
     return (
         <>
             <MenuBar menuList={menuList}  />

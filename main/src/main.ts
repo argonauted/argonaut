@@ -1,4 +1,4 @@
-import {app, BrowserWindow, dialog, ipcMain} from 'electron'
+import {app, BrowserWindow, ipcMain, nativeTheme} from 'electron'
 import process from 'process'
 import { RSession } from './RSession'
 import {saveFileAs, saveFile, openFile} from './fileAccess'
@@ -8,21 +8,21 @@ import path from 'path'
 let windows = []
 
 const APP_FILE = "./renderer/web/index.html"
-/*const APP_FILE = "./renderer/web/test.html"*/
 
 let rSession = new RSession()
+
+//platform data
+const isMac = process.platform === 'darwin'
+const isWindows = process.platform === "win32"
+const isOther = !isMac && !isWindows
 
 //=============================================
 // App/Electron Code
 //=============================================
 
-// custom title bar - se this package
-// https://github.com/AlexTorresDev/custom-electron-titlebar
-// npm i custom-electron-titlebar
-
 function createWindow(fileName) {
-    // Create the browser window.
-    let win = new BrowserWindow({
+    let browserOptions: Electron.BrowserWindowConstructorOptions = {
+        //Use custom title bar, with native control overlay
         width: 800, 
         height: 600,
         webPreferences: {
@@ -30,11 +30,37 @@ function createWindow(fileName) {
             contextIsolation: true,
 			preload: path.join(__dirname, "preload.js")
         }
-    })
+    }
+
+    if(isWindows) {
+        //Use custom title bar, with native control overlay
+        browserOptions.titleBarStyle = 'hidden'
+        browserOptions.titleBarOverlay = {
+            color: '#000000',
+            symbolColor: '#808080',
+            //height: 60
+        }
+    }
+    else if(isOther) {
+        //linux/other - custom title bar
+        browserOptions.frame = false
+    }
+
+    // Create the browser window.
+    let win = new BrowserWindow(browserOptions)
     win.setMenu(null)
-    
+
     // Open the DevTools.
     win.webContents.openDevTools() 
+
+    //===================
+    //send settings data
+    //===================
+    win.webContents.send('main-data',{
+        isMac: isMac,
+        isWindows: isWindows,
+        isOther: isOther
+    });
 
     // and load the index.html of the app.
     win.loadFile(fileName);  
@@ -71,6 +97,54 @@ app.on('ready', () => {
 
     ipcMain.handle('utilapi:getfilepath',getFilePath)
 
+    ipcMain.on('set-window-position', (_, { x, y }) => {
+        let win = windows[0]
+        win.setPosition(x, y);
+    });
+
+
+    ipcMain.on('minimize-window', () => {
+        let win = windows[0]
+        win.minimize();
+    });
+
+    ipcMain.on('maximize-window', () => {
+        let win = windows[0]
+        if (win.isMaximized()) {
+            win.unmaximize();
+        } else {
+            win.maximize();
+        }
+    });
+
+    ipcMain.on('close-window', () => {
+        let win = windows[0]
+        win.close();
+    });
+
+    //========================
+    // mac theme handling
+    //For always dark, do I need this?
+    if(isMac) {
+        ipcMain.handle('dark-mode:toggle', () => {
+            // if (nativeTheme.shouldUseDarkColors) {
+            //   nativeTheme.themeSource = 'light'
+            // } else {
+            //   nativeTheme.themeSource = 'dark'
+            // }
+            // return nativeTheme.shouldUseDarkColors
+            return true;
+        })
+    }
+    //===========================
+
+    //========================
+    // mac theme handling
+    if(isMac) {
+        nativeTheme.themeSource = 'dark'
+    }
+    //============================
+
     createWindow(APP_FILE)
 })
 
@@ -78,7 +152,7 @@ app.on('ready', () => {
 app.on('window-all-closed', () => {
     // On macOS it is common for applications and their menu bar
     // to stay active until the user quits explicitly with Cmd + Q
-    if (process.platform !== 'darwin') {
+    if (!isMac) {
         app.quit()
     }
 })

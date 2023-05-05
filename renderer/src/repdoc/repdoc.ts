@@ -6,21 +6,42 @@ import { repdocLint } from './document/repdocLint'
 import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./contextInfo/repdocCompletions"
 import { repdocHover } from "./contextInfo/repdocHover"
 import { repdocCursorContext } from "./contextInfo/repdocCursorContext"
-import { repdocTheme } from "./repdocTheme"
+import { repdocTheme, customScrollerTheme } from "./repdocTheme"
 
 import { repdocState } from "./document/repdocState"
 
 /** This is the extension to interface with the reactive code model and display the output in the editor */
 export const repdoc = (): Extension => {
-    return [
-        repdocTheme,
-        repdocState,
-        repdocLint,
-        mainCompletions,
-        packageCompletions,
-        keywordCompletions,
-        repdocCursorContext(),
-        repdocHover,
-        cleanupExtension
-    ]
+
+    //For mac we use the native scroll bar. For others we use a custom scroll bar, with customScrollerTheme
+    let mainData = window.electronAPI.getMainData()
+    let isMac = mainData !== undefined ? mainData.isMac : false
+    
+    if(isMac) {
+        return [
+            repdocTheme,
+            repdocState,
+            repdocLint,
+            mainCompletions,
+            packageCompletions,
+            keywordCompletions,
+            repdocCursorContext(),
+            repdocHover,
+            cleanupExtension
+        ]
+    }
+    else {
+        return [
+            repdocTheme,
+            customScrollerTheme,
+            repdocState,
+            repdocLint,
+            mainCompletions,
+            packageCompletions,
+            keywordCompletions,
+            repdocCursorContext(),
+            repdocHover,
+            cleanupExtension
+        ]
+    }
 }

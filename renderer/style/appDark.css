@@ -39,8 +39,29 @@ body {
 
 /***************** Menu Bar  ****************/
 .menu_bar {
+    display: flex;
+    flex-direction: row;
     color: rgb(252, 251, 251);
     background-color: rgb(0, 0, 0);
+    height: 33px;
+}
+
+.menu_bar_center {
+    flex-grow: 1;
+    user-select: none;
+    cursor: move;
+    display: inline;
+}
+
+.menu_bar_left {
+    flex-grow: 0;
+    display: inline;
+}
+
+.menu_bar_right {
+    flex-grow: 0;
+    /*float: right;*/
+    display: inline;
 }
 
 /***************** SelectMenu  ****************/
@@ -126,3 +147,43 @@ body {
     background-color:  rgb(4, 4, 56);
 
 }
+
+
+/* window controls */
+
+.window-controls {
+    display: flex;
+  }
+  
+  .window-control {
+    background-color: transparent;
+    border: none;
+    font-size: 20px;
+    /*padding: 5px;*/
+    cursor: pointer;
+    outline: none;
+    height: 33px;
+    width: 33px;
+  }
+  
+  .window-control .icon {
+    display: block;
+  }
+  
+  .window-control.minimize .icon {
+    color: #c0c0c0;
+  }
+  
+  .window-control.maximize .icon {
+    color: #c0c0c0;
+  }
+  
+  .window-control.close .icon {
+    color: #c0c0c0;
+    background-color: #ff2020;
+  }
+  
+  .window-control:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  

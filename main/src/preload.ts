@@ -1,5 +1,19 @@
 const {contextBridge, ipcRenderer} = require('electron')
 
+//=========================
+// Pass data from main
+//=========================
+
+let mainData: any
+
+ipcRenderer.on('main-data', (event, dataFromMain) => {
+	mainData = dataFromMain
+});
+
+//==========================
+// apis
+//==========================
+
 contextBridge.exposeInMainWorld('rSessionApi', {
 	//for now, I will just manage the connection in the renderer
 	sendRpcRequest: (scope,method,params) =>  ipcRenderer.invoke("rsession:sendrpcrequest",scope,method,params),
@@ -25,3 +39,21 @@ contextBridge.exposeInMainWorld('utilApi', {
 	getFilePath: relPath => ipcRenderer.invoke("utilapi:getfilepath",relPath)
 	
 })
+
+contextBridge.exposeInMainWorld('electronAPI', {
+	setPosition: (x, y) => {
+		ipcRenderer.send('set-window-position', { x, y });
+	},
+	minimizeWindow: () => {
+		ipcRenderer.send('minimize-window');
+	},
+	maximizeWindow: () => {
+		ipcRenderer.send('maximize-window');
+	},
+	closeWindow: () => {
+		ipcRenderer.send('close-window');
+	},
+	getMainData: () => mainData
+});
+
+

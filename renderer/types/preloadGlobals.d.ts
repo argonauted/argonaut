@@ -20,11 +20,21 @@ export interface IUtilApi {
   getFilePath: (relPath: string) => Promise<string>
 }
 
+export interface IElectronAPI {
+  setPosition: (newX: number, newY: number) => Promise<void>;
+  minimizeWindow: () => Promise<void>;
+  maximizeWindow: () => Promise<void>;
+  closeWindow: () => Promise<void>;
+  getMainData: () => any;
+}
+
+
 declare global {
   interface Window {
     rSessionApi: IRSessionApi,
     openSaveApi: IOpenSaveApi,
-    dialogApi: IDialogApi
+    dialogApi: IDialogApi,
+    electronAPI: IElectronAPI
     forceCloseBrowserWindow: () => void
   }
 }
