@@ -17,7 +17,7 @@ const chalky = "#e5c07b",
   darkBackground = "#21252b",
   highlightBackground = "#2c313a",
   
-  tooltipBackground = "#303030",
+  tooltipBackground = "#282828",
   selection = "#3E4451",
   cursor = "#528bff",
 
@@ -123,7 +123,7 @@ export const repdocDarkTheme = EditorView.theme({
   },
 
   ".cm-tooltip": {
-    border: "1px solid #606060",
+    border: "2px solid #606060",
     borderRadius: "3px",
     backgroundColor: tooltipBackground
   },

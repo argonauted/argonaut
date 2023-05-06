@@ -163,7 +163,7 @@ export const repdocBaseTheme = EditorView.baseTheme({
 
   },
   "&dark .cm-vd-fullContainer": {
-    "backgroundColor": "#1E1E1E"
+    "backgroundColor": "transparent"
   },
 
   "&dark .cm-vd-wrapperSpan": {
@@ -174,7 +174,8 @@ export const repdocBaseTheme = EditorView.baseTheme({
   "&dark .cm-vd-varTable": {
     "borderCollapse": "collapse",
     "fontFamily": "monospace",
-    "margin": "5px"
+    "margin": "5px",
+    "outline": "1px solid #383838"
   },
 
   "&dark .cm-vd-varName": {
@@ -199,7 +200,7 @@ export const repdocBaseTheme = EditorView.baseTheme({
   },
   "&dark .cm-vd-extraContainer": {
     "margin": "5px",
-    "backgroundColor": "#444444"
+    "backgroundColor": "#383838"
   },
   "&dark .cm-vd-linesContainer": {
     "padding": "5px",
@@ -209,7 +210,7 @@ export const repdocBaseTheme = EditorView.baseTheme({
     "padding": "1px 3px",
     "textAlign": "center",
     "color": "#888888",
-    "backgroundColor": "#444444"
+    "backgroundColor": "#383838"
   },
   "&dark .cm-vd-verticalText": {
     "writingMode": "vertical-rl",
@@ -220,15 +221,16 @@ export const repdocBaseTheme = EditorView.baseTheme({
     "textAlign": "center",
     "color": "#888888",
     "fontStyle": "italic",
-    "backgroundColor": "#444444"
+    "backgroundColor": "#383838"
   },
   "&dark .cm-vd-tableCornerCell": {
-    "padding": "1px 3px"
+    "padding": "1px 3px",
+    "backgroundColor": "#383838"
   },
   "&dark .cm-vd-tableValueCell": {
     "padding": "2px 5px",
     "textAlign": "center",
     "color": "#FFFFFF",
-    "backgroundColor": "#666666"
+    "backgroundColor": "transparent"
   }
 })
