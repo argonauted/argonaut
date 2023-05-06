@@ -12,22 +12,16 @@ export const RLanguage = LRLanguage.define({
         Block: foldInside
       }),
       styleTags({
-        "if else repeat while function for in next break": t.controlKeyword,
-        "NULL NA NA_integer_ NA_real_ NA_complex_ NA_Character_": t.null,
-        "Inf NaN": t.float,
+        //"if else repeat while function for in next break": t.keyword,
+        "if else repeat while function for in next break": t.keyword,
+        SpecialValue: t.literal,
         Numeric: t.float,
         Integer: t.integer,
         Complex: t.float,
         Logical: t.bool,
         Character: t.string,
-        Comment: t.lineComment,
-        Identifier: t.variableName,
-        "[ ]  [[  ]]": t.bracket,
-        ArithOp: t.arithmeticOperator,
-        CompOp: t.compareOperator,
-        LogicOp: t.logicOperator,
-        AssignOp: t.definitionOperator,
-        GenOp: t.operator
+        Comment: t.comment,
+        Identifier: t.variableName
       })
     ]
   }),

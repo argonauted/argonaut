@@ -36,8 +36,8 @@ function createWindow(fileName) {
         //Use custom title bar, with native control overlay
         browserOptions.titleBarStyle = 'hidden'
         browserOptions.titleBarOverlay = {
-            color: '#000000',
-            symbolColor: '#808080',
+            color: '#3c3c3c',
+            symbolColor: '#b9b9b9',
             //height: 60
         }
     }

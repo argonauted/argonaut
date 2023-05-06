@@ -18,6 +18,8 @@ body {
     margin:0px;
     font-family: sans-serif;
     font-size: 14px;
+    color: #fcfcf9;
+    background-color: #1e1e1e;
 }
 .appContainer {
     position:absolute;
@@ -41,8 +43,8 @@ body {
 .menu_bar {
     display: flex;
     flex-direction: row;
-    color: rgb(252, 251, 251);
-    background-color: rgb(0, 0, 0);
+    color: #555555;
+    background-color: #3c3c3c;
     height: 33px;
 }
 
@@ -75,9 +77,10 @@ body {
 
     /* need to set style here and for the menu bar */
     /*Also, remember we will use this for other inline menus */
-    color: rgb(193, 193, 199);
-    font-weight: bold;
+    color: #b9b9b9;
+    /*font-weight: bold;*/
     padding: 5px;
+    margin: 5px;
     line-height: 2.0; /* I had trouble with padding and spacing - this was to help. needs work. */
 }
 .selectMenu_select {
@@ -86,29 +89,30 @@ body {
     top: 0;
     right: 0;
     bottom: 0;
+    margin-left: 5px;
+    margin-right: 5px;
 
     /* This is supposed to hide the element. Need to test it on different platforms */
     background-color: rgba(0,0,0,0);
-    color: rgba(0,0,0,0);
     appearance: none;
     border: none; /* we still get a border for when it has focus. That is ok, but I don't like the look of it too much. */
 
 }
 .selectMenu_option { /* might want to make this specific to select menu */
     opacity: 1;
-    color: rgb(252, 251, 251);
-    background-color: rgb(0, 0, 0);
+    color: #cbcbca;
+    background-color: #252525;
 }
 .selectMenu_select:hover {
-    background-color: rgba(255,255,255,.1);  /* This covers the label text! Just make it with low opacity. */
+    background-color: rgba(255,255,255,.2);  /* This covers the label text! Just make it with low opacity. */
 }
 .selectMenu_select:active {
-    background-color: rgba(255,255,255,.1);
+    background-color: rgba(255,255,255,.2);
 }
 .selectMenu_select:focus-visible {
     /* this modifies the appearance when it has focus */
     border: none;
-    outline: 1px solid rgb(50, 50, 50);
+    outline: 1px solid #b9b9b9;
 }
 
 /***************** tabview  ****************/
@@ -118,11 +122,12 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
-    background-color: rgb(4, 4, 56);
+    color: #fcfcf9;
     overflow: hidden;
 }
 .tabView_head {
     flex-grow: 0;
+    background-color: #252526;
 }
 .tabView_body {
     position: relative;
@@ -132,19 +137,20 @@ body {
 .tabView_tab {
     display: inline-block;
     padding: 5px;
-    color: rgb(252, 251, 251);
 }
 .tabView_deselected {
-    background-color: rgb(4, 4, 56);
+    color: #959594;
+    background-color: #2d2d2d;
 }
 .tabView_selected {
-    background-color: rgb(34, 30, 43);
+    color: #fcfcf9;
+    background-color: #1e1e1e;
 }
 .tabView_frame {
     position: relative;
     height: 100%;
     overflow: hidden;
-    background-color:  rgb(4, 4, 56);
+    background-color: #1e1e1e;
 
 }
 

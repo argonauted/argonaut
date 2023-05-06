@@ -44,7 +44,7 @@ expression {
 }
 
 literal { 
-  Character | Numeric | Integer | Logical | Complex
+  Character | Numeric | Integer | Logical | Complex | SpecialValue
 }
 
 Identifier { 
@@ -155,9 +155,9 @@ kw<term> { @specialize[@name={term}]<simpleName, term> }
 ifKwd { kw<"if"> }
 elseKwd { kw<"else"> }
 repeatKwd { kw<"repeat"> }
-whileKwd[@export] { kw<"while"> }
-functionKwd[@export] { kw<"function"> }
-forKwd[@export] { kw<"for"> }
+whileKwd { kw<"while"> }
+functionKwd { kw<"function"> }
+forKwd { kw<"for"> }
 inKwd { kw<"in"> }
 
 infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | infix6 | infix7| infix8 | infix9 }
@@ -175,6 +175,8 @@ infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | inf
   }
 
   Logical { "TRUE" | "FALSE" }
+
+  SpecialValue { "NULL" | "NA" | "NA_integer_" | "NA_real_" | "NA_complex_" | "NA_Character_" | "Inf" | "NaN" }
 
   number {
     ( ( (@digit+ ( "." @digit* )? ) | ( "." @digit+ ) )  ( ("e" | "E") ("+" | "-")? @digit+ )? ) |
@@ -218,6 +220,7 @@ infix[@name="INFIX"] { infix0 | infix1 | infix2 | infix3 | infix4 | infix5 | inf
     infix9,
     backtickName,
     Logical,
+    SpecialValue,
     Character,
     Complex,
     Integer,

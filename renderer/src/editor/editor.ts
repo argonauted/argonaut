@@ -3,7 +3,7 @@ import { initDoc } from "../session/sessionApi"
 
 import {EditorView, keymap} from "@codemirror/view"
 
-import { oneDark } from "./oneDarkTheme"
+import { repdocDark } from "./repdocDarkTheme"
 
 import {setup} from "./setup"
 import {rlangsupport} from "../../argonaut-lezer-r/src"
@@ -39,7 +39,7 @@ export function getEditor(tabState: TabState, tabFunctions: AppFunctions, data: 
             repdoc(),
             rlangsupport(),
             docchangedextension(),
-            oneDark
+            repdocDark
         ],
         parent: element
     })

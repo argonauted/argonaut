@@ -67,8 +67,6 @@ export default class OutputDisplay extends WidgetType {
         if(this.element === null) {
             this.element = document.createElement("div")
             this.element.className = this.getCssName()
-            this.element.style.border = "1px solid #808080"
-            this.element.style.padding = "5px"
             this.updateStatus()
 
             this.errorElement = document.createElement("div")

@@ -6,7 +6,7 @@ import { repdocLint } from './document/repdocLint'
 import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./contextInfo/repdocCompletions"
 import { repdocHover } from "./contextInfo/repdocHover"
 import { repdocCursorContext } from "./contextInfo/repdocCursorContext"
-import { repdocTheme, customScrollerTheme } from "./repdocTheme"
+import { repdocBaseTheme, customScrollerTheme } from "./repdocTheme"
 
 import { repdocState } from "./document/repdocState"
 
@@ -19,7 +19,7 @@ export const repdoc = (): Extension => {
     
     if(isMac) {
         return [
-            repdocTheme,
+            repdocBaseTheme,
             repdocState,
             repdocLint,
             mainCompletions,
@@ -32,7 +32,7 @@ export const repdoc = (): Extension => {
     }
     else {
         return [
-            repdocTheme,
+            repdocBaseTheme,
             customScrollerTheme,
             repdocState,
             repdocLint,

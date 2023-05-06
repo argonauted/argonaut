@@ -4,7 +4,7 @@
 
 import {EditorView} from "@codemirror/view"
 
-export const customScrollerTheme = EditorView.baseTheme({
+export const customScrollerTheme = EditorView.theme({
   "& .cm-scroller::-webkit-scrollbar": {
       "width": "20px",
   },
@@ -12,22 +12,25 @@ export const customScrollerTheme = EditorView.baseTheme({
       "background": "rgba(0,0,0,0)"
   },
   "& .cm-scroller::-webkit-scrollbar-thumb": {
-      "background-color": "#808080",
+      "background-color": "#424242",
       "border-radius": "6px",
-      "border": "4px solid rgba(0,0,0,0)",
+      "border": "4px solid #393939",
       "background-clip": "content-box",
       "min-width": "32px",
       "min-height": "32px"
   },
   "& .cm-scroller::-webkit-scrollbar-track": {
-      "background-color": "rgba(0,0,0,0)"
+      "background-color": "#1e1e1e"
   },
 })
 
-export const repdocTheme = EditorView.baseTheme({
+export const repdocBaseTheme = EditorView.baseTheme({
 
   "&": {height: "100%"},
   ".cm-scroller": {overflow: "auto"},
+
+  "&light .cm-active-line": {outline: "1px solid #808080", backgroundColor: "transparent"},
+  "&dark .cm-activeLine": {outline: "1px solid #808080", backgroundColor: "transparent"},
 
   //======================
   // Repdoc Display CSS
@@ -39,18 +42,18 @@ export const repdocTheme = EditorView.baseTheme({
   "&dark .cm-rd-wrnText": {color: "orange", fontWeight: "bold"},
   "&dark .cm-rd-msgText": {color: "lightblue"},
 
-  "&light .cm-rd-codeDirtyShade": {backgroundColor: "rgba(145,200,255,0.5)"},
-  "&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(180,180,180,0.5)"},
-  "&dark .cm-rd-codeDirtyShade": {backgroundColor: "rgba(52,26,0,0.5)"},
-  "&dark .cm-rd-valuePendingShade": {backgroundColor: "rgba(31,31,31,0.5)"},
+  //"&light .cm-rd-codeDirtyShade": {backgroundColor: "rgba(145,200,255,0.5)"},
+  //"&light .cm-rd-valuePendingShade": {backgroundColor: "rgba(180,180,180,0.5)"},
 
   //=================
   // Output Display
   //=================
 
   "& .cm-outputdisplay-base": {
-    "border": "1px solid #808080",
-    "padding": "5px"
+    "border": "1px solid #606060",
+    "padding": "5px",
+    "borderRadius": "3px",
+    "marginRight": "5px" 
   },
     
   "&light .cm-outdisplay-code-dirty": {backgroundColor: "rgb(245, 245, 220)"},
@@ -58,10 +61,10 @@ export const repdocTheme = EditorView.baseTheme({
   "&light .cm-outdisplay-pending": {backgroundColor: "#808080"},
   "&light .cm-outdisplay-clean": {backgroundColor: "#F0F0F8"},
 
-  "&dark .cm-outdisplay-code-dirty": {backgroundColor: "rgb(77, 77, 12)"},
-  "&dark .cm-outdisplay-inputs-dirty": {backgroundColor: "#808080"}, 
-  "&dark .cm-outdisplay-pending": {backgroundColor: "#808080"},
-  "&dark .cm-outdisplay-clean": {backgroundColor: "#0F0F08"},
+  "&dark .cm-outdisplay-code-dirty": {backgroundColor: "#303030"},
+  "&dark .cm-outdisplay-inputs-dirty": {backgroundColor: "#3a3417", opacity: 0.6}, 
+  "&dark .cm-outdisplay-pending": {backgroundColor: "#3a3417", opacity: 0.6},
+  "&dark .cm-outdisplay-clean": {backgroundColor: "#303030"},
   //==================
   // Var Display CSS
   //==================
@@ -151,11 +154,13 @@ export const repdocTheme = EditorView.baseTheme({
 //-------------------
 
   "&dark .cm-vardisplay-main": { 
-    "backgroundColor": "rgb(6,42,89)",
+    "backgroundColor": "#303030",
     "marginLeft": "15px",
-    "opacity": ".5",
     "paddingLeft": "5px",
-    "paddingRight": "5px"
+    "paddingRight": "5px",
+    "border": "1px solid #606060",
+    "borderRadius": "3px"
+
   },
   "&dark .cm-vd-fullContainer": {
     "backgroundColor": "#1E1E1E"
