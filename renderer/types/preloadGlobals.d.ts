@@ -23,7 +23,9 @@ export interface IUtilApi {
 export interface IElectronAPI {
   setPosition: (newX: number, newY: number) => Promise<void>;
   minimizeWindow: () => Promise<void>;
+  toggleMaximizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
+  unmaximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
   getMainData: () => any;
 }

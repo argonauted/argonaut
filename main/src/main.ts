@@ -72,6 +72,10 @@ function createWindow(fileName) {
     })
 
     windows.push(win);
+
+    win.on('unmaximize', () => {
+        console.log("unmaximize!")
+      });
 }
 
 // This method will be called when Electron has finished
@@ -99,6 +103,10 @@ app.on('ready', () => {
 
     ipcMain.on('set-window-position', (_, { x, y }) => {
         let win = windows[0]
+        //note -this does't work. It doesn't seem to unmaximize while the user id dragging.
+        // if (win.isMaximized()) {
+        //     win.unmaximize()
+        // }
         win.setPosition(x, y);
     });
 
@@ -108,12 +116,26 @@ app.on('ready', () => {
         win.minimize();
     });
 
-    ipcMain.on('maximize-window', () => {
+    ipcMain.on('toggle-maximize-window', () => {
         let win = windows[0]
         if (win.isMaximized()) {
             win.unmaximize();
         } else {
             win.maximize();
+        }
+    });
+
+    ipcMain.on('maximize-window', () => {
+        let win = windows[0]
+        if (!win.isMaximized()) {
+            win.maximize();
+        }
+    });
+
+    ipcMain.on('unmaximize-window', () => {
+        let win = windows[0]
+        if (win.isMaximized()) {
+            win.unmaximize();
         }
     });
 

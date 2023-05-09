@@ -89,7 +89,7 @@ const WindowControls = () => {
   };
 
   const handleMaximize = () => {
-    window.electronAPI.maximizeWindow();
+    window.electronAPI.toggleMaximizeWindow();
   };
 
   const handleClose = () => {

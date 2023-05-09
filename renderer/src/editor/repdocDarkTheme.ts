@@ -14,19 +14,37 @@ const chalky = "#e5c07b",
   sage = "#98c379",
   whiskey = "#d19a66",
   violet = "#c678dd",
-  darkBackground = "#21252b",
+
+  background = "#1e1e1e",
+  darkBackground = "#171717",
   highlightBackground = "#2c313a",
-  
+
   tooltipBackground = "#282828",
+  tooltipBorder = "2px solid #606060",
+
+  outputBackground = "#303030",
+  outputBorder = "1px solid #606060",
+
+  tableHeaderBackground = "#383838",
+  tableBodyBackground = "transparent",
+  tableBorder = "1px solid #383838",
+
+  dirtyCodeBackground = "#0d0e2f",
+  pendingCodeBackground = "#3a3417",
+
+  pendingOutputBackground = "#564a10",
+  pendingOutputOpacity = "0.5",
+
+  text = "#d4d4d4",
+  lesserText = "#b4b4b4",
+  leastText = "#949494",
+
+  varDisplayTitle = "#579df1", //"#5294E2"
+
   selection = "#3E4451",
   cursor = "#528bff",
 
-  invalid = "#ff0000",
-  background = "#1e1e1e",
-
-  text = "#d4d4d4",
-  lesserText = "#949494",
-
+  //syntax higlighting
   comment = "#228822",
   keyword = "#6688dd",
   bracket =  "#d4d4d4",
@@ -36,7 +54,9 @@ const chalky = "#e5c07b",
   integer = "#ead993",
   string = "#da946a",
   boolean = "#aa88ee",
-  literal = "#ee88aa"
+  literal = "#ee88aa",
+
+  invalid = "#ff0000"
   
 
 /// The colors used in the theme, as CSS color strings.
@@ -123,7 +143,7 @@ export const repdocDarkTheme = EditorView.theme({
   },
 
   ".cm-tooltip": {
-    border: "2px solid #606060",
+    border: tooltipBorder,
     borderRadius: "3px",
     backgroundColor: tooltipBackground
   },
@@ -142,9 +162,75 @@ export const repdocDarkTheme = EditorView.theme({
     }
   },
 
+  "& .cm-scroller::-webkit-scrollbar-corner": {
+    "background": "rgba(0,0,0,0)"
+  },
+  "& .cm-scroller::-webkit-scrollbar-thumb": {
+      "background-color": "#424242",
+      "border": "4px solid #393939",
+  },
+  "& .cm-scroller::-webkit-scrollbar-track": {
+      "background-color": "#1e1e1e"
+  },
+
+  //-------------------
   //repdoc specific
-  ".cm-rd-codeDirtyShade": {backgroundColor: "#0d0e2f"},
-  ".cm-rd-valuePendingShade": {backgroundColor: "#3a3417"}
+  //-------------------
+
+  ".cm-rd-codeDirtyShade": {backgroundColor: dirtyCodeBackground},
+  ".cm-rd-valuePendingShade": {backgroundColor: pendingCodeBackground},
+
+  ".cm-outputdisplay-base": {
+    "border": outputBorder,
+  },
+
+  ".cm-outdisplay-code-dirty": {backgroundColor: outputBackground},
+  ".cm-outdisplay-inputs-dirty": {backgroundColor: pendingOutputBackground, opacity: pendingOutputOpacity}, 
+  ".cm-outdisplay-pending": {backgroundColor: pendingOutputBackground, opacity: pendingOutputOpacity},
+  ".cm-outdisplay-clean": {backgroundColor: outputBackground},
+
+  ".cm-vardisplay-main": { 
+    "backgroundColor": outputBackground,
+    "border": outputBorder,
+  },
+
+  ".cm-vd-varTable": {
+    "outline": tableBorder
+  },
+
+  ".cm-vd-varName": {
+    "color": varDisplayTitle
+  },
+  ".cm-vd-varType": {
+    "color": varDisplayTitle
+  },
+  "&.cm-vd-shortKeyLabel": {
+    "color": lesserText,
+  },
+
+  ".cm-vd-shortKeyBody": {
+    "color": text
+  },
+
+  ".cm-vd-extraContainer": {
+    "backgroundColor": tableHeaderBackground
+  },
+
+  ".cm-vd-tableNameCell": {
+    "color": lesserText,
+    "backgroundColor": tableHeaderBackground
+  },
+  ".cm-vd-tableIndexCell": {
+    "color": lesserText,
+    "backgroundColor": tableHeaderBackground
+  },
+  ".cm-vd-tableCornerCell": {
+    "backgroundColor": tableHeaderBackground
+  },
+  ".cm-vd-tableValueCell": {
+    "color": text,
+    "backgroundColor": tableBodyBackground
+  }
 
 }, {dark: true})
 
@@ -177,7 +263,7 @@ export const repDarkHighlightStyle = HighlightStyle.define([
   
 ])
 
-//original definitions
+//original definitions - oneDarkTheme
 // {tag: [t.name, t.deleted, t.character, t.propertyName, t.macroName],
 //   color: coral},
 //  {tag: [t.function(t.variableName), t.labelName],

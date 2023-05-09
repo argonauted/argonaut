@@ -158,7 +158,7 @@ function getOneLinerElement(label: string, typeInfo: string, lineInfo?: LineInfo
     element.appendChild(document.createTextNode(" "))
 
     let typeSpan = document.createElement("span")
-    typeSpan.className = "cm-vd-varName"
+    typeSpan.className = "cm-vd-varType"
     typeSpan.textContent = typeInfo
     element.appendChild(typeSpan)
 
@@ -167,7 +167,7 @@ function getOneLinerElement(label: string, typeInfo: string, lineInfo?: LineInfo
             element.appendChild(document.createTextNode(" "))
 
             let listLabelSpan = document.createElement("span")
-            listLabelSpan.className = "cm-vd-listLabel cm-vd-notFirst"
+            listLabelSpan.className = "cm-vd-shortKeyLabel cm-vd-notFirst"
             listLabelSpan.textContent = lineInfo.dataLabel + ":"
             element.appendChild(listLabelSpan)
         }
@@ -175,7 +175,7 @@ function getOneLinerElement(label: string, typeInfo: string, lineInfo?: LineInfo
             element.appendChild(document.createTextNode(" "))
 
             let listValuesSpan = document.createElement("span")
-            listValuesSpan.className = "cm-vd-listBody"
+            listValuesSpan.className = "cm-vd-shortKeyBody"
             listValuesSpan.textContent = lineInfo.data
             element.appendChild(listValuesSpan)
         }
@@ -190,14 +190,14 @@ function getKeyValueLineElement(label: string, data: string) {
     element.className = "cm-vd-wrapperSpan"
 
     let labelSpan = document.createElement("span")
-    labelSpan.className = "cm-vd-listLabel"
+    labelSpan.className = "cm-vd-shortKeyLabel"
     labelSpan.textContent = label + ":"
     element.appendChild(labelSpan)
 
     element.appendChild(document.createTextNode(" "))
 
     let dataSpan = document.createElement("span")
-    dataSpan.className = "cm-vd-listBody"
+    dataSpan.className = "cm-vd-shortKeyBody"
     dataSpan.textContent = data
     element.appendChild(dataSpan)
     

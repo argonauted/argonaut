@@ -6,7 +6,7 @@ import { repdocLint } from './document/repdocLint'
 import { mainCompletions, packageCompletions, keywordCompletions, cleanupExtension } from "./contextInfo/repdocCompletions"
 import { repdocHover } from "./contextInfo/repdocHover"
 import { repdocCursorContext } from "./contextInfo/repdocCursorContext"
-import { repdocBaseTheme, customScrollerTheme } from "./repdocTheme"
+import { repdocBaseTheme, customScrollerTheme } from "./repdocBaseTheme"
 
 import { repdocState } from "./document/repdocState"
 

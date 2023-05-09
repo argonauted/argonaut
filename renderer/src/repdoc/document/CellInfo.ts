@@ -111,6 +111,8 @@ export class CellInfo {
         //------------------------------------
         let lineShadingChanged = false  //I could detect shading change, instead I just follow the status change
         if( statusChanged ) {
+            outputChanged = true
+
             let className = getLineShadingClass(this)
             if(className !== null) {
                 this.lineShading = Decoration.line({attributes: {class: className}})
