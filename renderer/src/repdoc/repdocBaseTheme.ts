@@ -29,7 +29,7 @@ export const repdocBaseTheme = EditorView.baseTheme({
   "&": {height: "100%"},
   ".cm-scroller": {overflow: "auto"},
 
-  //".cm-activeLine": {outline: "1px solid #808080", backgroundColor: "transparent"},
+  ".cm-activeLine": {outline: "1px solid #808080", backgroundColor: "transparent"},
 
   //======================
   // Repdoc Display CSS

@@ -24,6 +24,7 @@ const chalky = "#e5c07b",
 
   outputBackground = "#303030",
   outputBorder = "1px solid #606060",
+  varBackground = "rgb(17,48,49)",
 
   tableHeaderBackground = "#383838",
   tableBodyBackground = "transparent",
@@ -74,6 +75,8 @@ export const color = {
   darkBackground,
   highlightBackground,
   background,
+  outputBackground,
+  varBackground,
   tooltipBackground,
   selection,
   cursor,
@@ -190,7 +193,7 @@ export const repdocDarkTheme = EditorView.theme({
   ".cm-outdisplay-clean": {backgroundColor: outputBackground},
 
   ".cm-vardisplay-main": { 
-    "backgroundColor": outputBackground,
+    "backgroundColor": varBackground,
     "border": outputBorder,
   },
 
