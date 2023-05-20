@@ -25,12 +25,13 @@ const chalky = "#e5c07b",
   outputBackground = "#303030",
   outputBorder = "1px solid #606060",
   varBackground = "rgb(17,48,49)",
+  varBorder = "1px dotted #606060",
 
   tableHeaderBackground = "#383838",
   tableBodyBackground = "transparent",
   tableBorder = "1px solid #383838",
 
-  dirtyCodeBackground = "#0d0e2f",
+  dirtyCodeBackground = "#182a4f", //"#0d0e2f",
   pendingCodeBackground = "#3a3417",
 
   pendingOutputBackground = "#564a10",
@@ -122,7 +123,7 @@ export const repdocDarkTheme = EditorView.theme({
     backgroundColor: "#6199ff2f"
   },
 
-  ".cm-activeLine": {outline: "1px dotted #565e81"},
+  ".cm-activeLine": {backgroundColor: "#3060c018", outline: "1px solid #3b5d87"}, //{outline: "1px dotted #565e81"},
   ".cm-selectionMatch": {backgroundColor: "#aafe661a"},
 
   "&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket": {
@@ -194,7 +195,7 @@ export const repdocDarkTheme = EditorView.theme({
 
   ".cm-vardisplay-main": { 
     "backgroundColor": varBackground,
-    "border": outputBorder,
+    "border": varBorder,
   },
 
   ".cm-vd-varTable": {
